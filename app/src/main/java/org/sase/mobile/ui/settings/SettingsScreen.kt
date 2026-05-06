@@ -169,7 +169,10 @@ private fun SessionStatusCard(
                 OutlinedButton(onClick = onRefresh) {
                     Text("Check session")
                 }
-                OutlinedButton(onClick = onForget) {
+                OutlinedButton(
+                    modifier = Modifier.testTag("forget_host_button"),
+                    onClick = onForget,
+                ) {
                     Text("Forget host")
                 }
             }
@@ -194,7 +197,9 @@ private fun ManualPairingFields(
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Manual pairing", style = MaterialTheme.typography.titleMedium)
         OutlinedTextField(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("gateway_url_input"),
             value = hostUrl,
             onValueChange = onHostUrlChange,
             label = { Text("Gateway URL") },
@@ -202,14 +207,18 @@ private fun ManualPairingFields(
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None),
         )
         OutlinedTextField(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("host_label_input"),
             value = hostLabel,
             onValueChange = onHostLabelChange,
             label = { Text("Host label") },
             singleLine = true,
         )
         OutlinedTextField(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("pairing_id_input"),
             value = pairingId,
             onValueChange = onPairingIdChange,
             label = { Text("Pairing ID") },
@@ -217,7 +226,9 @@ private fun ManualPairingFields(
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None),
         )
         OutlinedTextField(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("pairing_code_input"),
             value = pairingCode,
             onValueChange = onPairingCodeChange,
             label = { Text("One-time code") },
@@ -225,13 +236,18 @@ private fun ManualPairingFields(
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None),
         )
         OutlinedTextField(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("device_name_input"),
             value = deviceName,
             onValueChange = onDeviceNameChange,
             label = { Text("Device display name") },
             singleLine = true,
         )
-        Button(onClick = onPair) {
+        Button(
+            modifier = Modifier.testTag("pair_host_button"),
+            onClick = onPair,
+        ) {
             Text("Pair host")
         }
     }
@@ -247,7 +263,9 @@ private fun QrPairingFields(
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("QR pairing", style = MaterialTheme.typography.titleMedium)
         OutlinedTextField(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("qr_payload_input"),
             value = qrPayload,
             onValueChange = onQrPayloadChange,
             label = { Text("QR payload") },

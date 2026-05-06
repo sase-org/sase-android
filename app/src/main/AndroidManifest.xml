@@ -12,7 +12,8 @@
         android:label="@string/app_name"
         android:roundIcon="@drawable/ic_sase_mobile"
         android:supportsRtl="true"
-        android:theme="@style/Theme.SaseMobile">
+        android:theme="@style/Theme.SaseMobile"
+        android:usesCleartextTraffic="true">
         <activity
             android:name=".MainActivity"
             android:exported="true"
