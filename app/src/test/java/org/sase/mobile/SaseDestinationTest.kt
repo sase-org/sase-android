@@ -12,9 +12,23 @@ class SaseDestinationTest {
     }
 
     @Test
-    fun bottomNavigationStartsWithInboxAndSettings() {
-        val routes = listOf(SaseDestination.Inbox.route, SaseDestination.Settings.route)
+    fun bottomNavigationStartsWithInboxAgentsAndSettings() {
+        val routes = listOf(
+            SaseDestination.Inbox.route,
+            SaseDestination.Agents.route,
+            SaseDestination.Settings.route,
+        )
 
-        assertThat(routes).containsExactly("inbox", "settings").inOrder()
+        assertThat(routes).containsExactly("inbox", "agents", "settings").inOrder()
+    }
+
+    @Test
+    fun updateRouteIsSettingsLinkedDestination() {
+        assertThat(SaseDestination.Update.route).isEqualTo("update")
+    }
+
+    @Test
+    fun helpersRouteIsSettingsLinkedDestination() {
+        assertThat(SaseDestination.Helpers.route).isEqualTo("helpers")
     }
 }

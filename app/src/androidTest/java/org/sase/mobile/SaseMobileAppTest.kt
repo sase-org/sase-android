@@ -23,4 +23,27 @@ class SaseMobileAppTest {
 
         composeRule.onNodeWithTag("settings_screen").assertIsDisplayed()
     }
+
+    @Test
+    fun canOpenAgentsDestination() {
+        composeRule.onNodeWithText("Agents").performClick()
+
+        composeRule.onNodeWithTag("agents_screen").assertIsDisplayed()
+    }
+
+    @Test
+    fun canOpenUpdateDestinationFromSettings() {
+        composeRule.onNodeWithText("Settings").performClick()
+        composeRule.onNodeWithTag("open_update_button").performClick()
+
+        composeRule.onNodeWithTag("update_screen").assertIsDisplayed()
+    }
+
+    @Test
+    fun canOpenHelpersDestinationFromSettings() {
+        composeRule.onNodeWithText("Settings").performClick()
+        composeRule.onNodeWithTag("open_helpers_button").performClick()
+
+        composeRule.onNodeWithTag("helpers_screen").assertIsDisplayed()
+    }
 }

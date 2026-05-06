@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.decodeFromJsonElement
 import org.sase.mobile.data.api.GatewayApiClient
 import org.sase.mobile.data.api.GatewayApiError
 import org.sase.mobile.data.api.GatewayApiResult
@@ -17,8 +18,11 @@ import org.sase.mobile.data.api.GatewaySseResult
 import org.sase.mobile.data.api.NotificationListQuery
 import org.sase.mobile.data.api.SseReconnectPolicy
 import org.sase.mobile.data.api.dto.ApiErrorCodeWire
+import org.sase.mobile.data.api.dto.AgentsChangedEventPayloadWire
 import org.sase.mobile.data.api.dto.EventPayloadTypeWire
 import org.sase.mobile.data.api.dto.EventRecordWire
+import org.sase.mobile.data.api.dto.GatewayJson
+import org.sase.mobile.data.api.dto.HelpersChangedEventPayloadWire
 import org.sase.mobile.data.api.dto.MobileNotificationCardWire
 import org.sase.mobile.data.api.dto.MobileNotificationDetailResponseWire
 import org.sase.mobile.data.api.dto.NotificationStateMutationResponseWire
@@ -35,6 +39,8 @@ class NotificationRepository(
     private val reconnectPolicy: SseReconnectPolicy = SseReconnectPolicy(),
     private val clock: Clock = Clock.systemUTC(),
     private val delayProvider: suspend (Long) -> Unit = { delay(it) },
+    private val onAgentsChanged: suspend (AgentsChangedEventPayloadWire) -> Unit = {},
+    private val onHelpersChanged: suspend (HelpersChangedEventPayloadWire) -> Unit = {},
     private val scope: CoroutineScope,
 ) {
     private val mutableInbox = MutableStateFlow(NotificationInboxState())
@@ -45,6 +51,9 @@ class NotificationRepository(
 
     private val mutableRefresh = MutableStateFlow(NotificationRefreshState.Idle)
     val refresh: StateFlow<NotificationRefreshState> = mutableRefresh.asStateFlow()
+
+    private val mutableHelperEvents = MutableStateFlow(0)
+    val helperEvents: StateFlow<Int> = mutableHelperEvents.asStateFlow()
 
     @Volatile
     private var stopped = false
@@ -215,10 +224,40 @@ class NotificationRepository(
             EventPayloadTypeWire.NotificationsChanged -> fullRefresh(RefreshReason.NotificationsChanged)
             EventPayloadTypeWire.ResyncRequired -> fullRefresh(RefreshReason.ResyncRequired)
             EventPayloadTypeWire.Session -> fullRefresh(RefreshReason.SessionChanged)
-            EventPayloadTypeWire.AgentsChanged,
-            EventPayloadTypeWire.HelpersChanged,
-            -> Unit
+            EventPayloadTypeWire.AgentsChanged -> handleAgentsChanged(event)
+            EventPayloadTypeWire.HelpersChanged -> {
+                mutableHelperEvents.value += 1
+                handleHelpersChanged(event)
+            }
         }
+    }
+
+    private suspend fun handleAgentsChanged(event: EventRecordWire) {
+        val payload = try {
+            GatewayJson.format.decodeFromJsonElement(
+                AgentsChangedEventPayloadWire.serializer(),
+                event.payload.data,
+            )
+        } catch (_: kotlinx.serialization.SerializationException) {
+            return
+        } catch (_: IllegalArgumentException) {
+            return
+        }
+        onAgentsChanged(payload)
+    }
+
+    private suspend fun handleHelpersChanged(event: EventRecordWire) {
+        val payload = try {
+            GatewayJson.format.decodeFromJsonElement(
+                HelpersChangedEventPayloadWire.serializer(),
+                event.payload.data,
+            )
+        } catch (_: kotlinx.serialization.SerializationException) {
+            return
+        } catch (_: IllegalArgumentException) {
+            return
+        }
+        onHelpersChanged(payload)
     }
 
     private suspend fun mutateState(

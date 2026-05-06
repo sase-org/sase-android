@@ -126,6 +126,14 @@ class FakeGateway : Closeable {
                         actionResponse(request)
                     }
 
+                    request.method == "GET" && routePath == "/api/v1/notifications" -> {
+                        jsonResponse(readResource(GatewayFixturePaths.NotificationsMixed))
+                    }
+
+                    request.method == "GET" && routePath == "/api/v1/notifications/plan0001-review" -> {
+                        jsonResponse(readResource(GatewayFixturePaths.NotificationDetailPlan))
+                    }
+
                     request.method == "GET" && routePath == "/api/v1/agents" -> {
                         jsonResponse(readResource(GatewayFixturePaths.AgentsList))
                     }

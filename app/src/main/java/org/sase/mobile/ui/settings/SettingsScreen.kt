@@ -35,6 +35,8 @@ import org.sase.mobile.data.session.SessionStatus
 @Composable
 fun SettingsScreen(
     controller: SessionController,
+    onOpenUpdate: () -> Unit = {},
+    onOpenHelpers: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val state by controller.state.collectAsState()
@@ -67,6 +69,8 @@ fun SettingsScreen(
             onForget = {
                 scope.launch { controller.forgetHost() }
             },
+            onOpenUpdate = onOpenUpdate,
+            onOpenHelpers = onOpenHelpers,
         )
         ManualPairingFields(
             hostUrl = hostUrl,
@@ -122,6 +126,8 @@ private fun SessionStatusCard(
     status: SessionStatus,
     onRefresh: () -> Unit,
     onForget: () -> Unit,
+    onOpenUpdate: () -> Unit,
+    onOpenHelpers: () -> Unit,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -174,6 +180,18 @@ private fun SessionStatusCard(
                     onClick = onForget,
                 ) {
                     Text("Forget host")
+                }
+                OutlinedButton(
+                    modifier = Modifier.testTag("open_update_button"),
+                    onClick = onOpenUpdate,
+                ) {
+                    Text("SASE update")
+                }
+                OutlinedButton(
+                    modifier = Modifier.testTag("open_helpers_button"),
+                    onClick = onOpenHelpers,
+                ) {
+                    Text("Workflow helpers")
                 }
             }
         }

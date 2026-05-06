@@ -38,6 +38,13 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import org.sase.mobile.R
+import org.sase.mobile.data.actions.ActionFailure
+import org.sase.mobile.data.actions.ActionFailureKind
+import org.sase.mobile.data.actions.ActionSubmissionState
+import org.sase.mobile.data.actions.NotificationActionControl
+import org.sase.mobile.data.actions.NotificationActionController
+import org.sase.mobile.data.actions.actionUnavailableFailure
+import org.sase.mobile.data.actions.deriveNotificationActionControls
 import org.sase.mobile.data.api.dto.MobileActionKindWire
 import org.sase.mobile.data.api.dto.MobileActionStateWire
 import org.sase.mobile.data.api.dto.MobileAttachmentKindWire
@@ -53,12 +60,54 @@ fun NotificationDetailScreen(
     notificationId: String,
     modifier: Modifier = Modifier,
     repository: NotificationRepository? = null,
+    actionController: NotificationActionController? = null,
     initialState: NotificationDetailState? = null,
     onBack: () -> Unit = {},
+    onOpenSettings: () -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     var detailState by remember(notificationId, initialState) { mutableStateOf(initialState) }
     var mutationMessage by remember(notificationId) { mutableStateOf<String?>(null) }
+    var actionUiState by remember(notificationId) { mutableStateOf<ActionUiState?>(null) }
+    var pendingConfirmation by remember(notificationId) { mutableStateOf<NotificationActionControl?>(null) }
+    var lastAction by remember(notificationId) { mutableStateOf<NotificationActionControl?>(null) }
+
+    fun refreshDetail() {
+        scope.launch {
+            if (repository != null) {
+                detailState = repository.refreshDetail(notificationId)
+            }
+        }
+    }
+
+    fun submitAction(detail: MobileNotificationDetailResponseWire, control: NotificationActionControl) {
+        scope.launch {
+            lastAction = control
+            pendingConfirmation = null
+            val controller = actionController
+            if (controller == null) {
+                actionUiState = ActionUiState.Failure(
+                    ActionFailure(
+                        kind = ActionFailureKind.Disconnected,
+                        message = "Action controller is unavailable.",
+                        canRetry = true,
+                    ),
+                )
+                return@launch
+            }
+            actionUiState = ActionUiState.Submitting(control.label)
+            when (val result = controller.submitAction(notificationId, detail.action, control.choice)) {
+                is ActionSubmissionState.Success -> {
+                    result.refreshedDetail?.let { detailState = it }
+                    actionUiState = ActionUiState.Success(result)
+                }
+                is ActionSubmissionState.Failure -> {
+                    result.refreshedDetail?.let { detailState = it }
+                    actionUiState = ActionUiState.Failure(result.failure)
+                }
+            }
+        }
+    }
 
     LaunchedEffect(notificationId, repository) {
         if (repository != null) {
@@ -100,6 +149,8 @@ fun NotificationDetailScreen(
                 DetailContent(
                     state = state,
                     mutationMessage = mutationMessage,
+                    actionUiState = actionUiState,
+                    pendingConfirmation = pendingConfirmation,
                     onMarkRead = {
                         scope.launch {
                             val success = repository?.markRead(notificationId) ?: false
@@ -118,6 +169,24 @@ fun NotificationDetailScreen(
                             }
                         }
                     },
+                    onAction = { detail, control ->
+                        if (control.requiresConfirmation) {
+                            pendingConfirmation = control
+                        } else {
+                            submitAction(detail, control)
+                        }
+                    },
+                    onConfirmAction = { detail, control -> submitAction(detail, control) },
+                    onCancelAction = { pendingConfirmation = null },
+                    onRetryAction = {
+                        val current = (detailState as? NotificationDetailState.Ready)?.detail
+                        val retry = lastAction
+                        if (current != null && retry != null) {
+                            submitAction(current, retry)
+                        }
+                    },
+                    onRefresh = { refreshDetail() },
+                    onOpenSettings = onOpenSettings,
                 )
             }
         }
@@ -153,8 +222,16 @@ private fun FailedDetail(message: String) {
 private fun DetailContent(
     state: NotificationDetailState.Ready,
     mutationMessage: String?,
+    actionUiState: ActionUiState?,
+    pendingConfirmation: NotificationActionControl?,
     onMarkRead: () -> Unit,
     onDismiss: () -> Unit,
+    onAction: (MobileNotificationDetailResponseWire, NotificationActionControl) -> Unit,
+    onConfirmAction: (MobileNotificationDetailResponseWire, NotificationActionControl) -> Unit,
+    onCancelAction: () -> Unit,
+    onRetryAction: () -> Unit,
+    onRefresh: () -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     val detail = state.detail
     val card = detail.notification
@@ -185,7 +262,17 @@ private fun DetailContent(
             style = MaterialTheme.typography.bodySmall,
         )
 
-        ActionState(detail)
+        ActionState(
+            detail = detail,
+            actionUiState = actionUiState,
+            pendingConfirmation = pendingConfirmation,
+            onAction = { control -> onAction(detail, control) },
+            onConfirmAction = { control -> onConfirmAction(detail, control) },
+            onCancelAction = onCancelAction,
+            onRetryAction = onRetryAction,
+            onRefresh = onRefresh,
+            onOpenSettings = onOpenSettings,
+        )
 
         HorizontalDivider()
 
@@ -262,8 +349,20 @@ private fun DetailContent(
 }
 
 @Composable
-private fun ActionState(detail: MobileNotificationDetailResponseWire) {
+private fun ActionState(
+    detail: MobileNotificationDetailResponseWire,
+    actionUiState: ActionUiState?,
+    pendingConfirmation: NotificationActionControl?,
+    onAction: (NotificationActionControl) -> Unit,
+    onConfirmAction: (NotificationActionControl) -> Unit,
+    onCancelAction: () -> Unit,
+    onRetryAction: () -> Unit,
+    onRefresh: () -> Unit,
+    onOpenSettings: () -> Unit,
+) {
     val action = detail.action
+    val controls = deriveNotificationActionControls(action)
+    val unavailable = actionUnavailableFailure(action)
     Surface(
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
         shape = MaterialTheme.shapes.small,
@@ -275,19 +374,134 @@ private fun ActionState(detail: MobileNotificationDetailResponseWire) {
         ) {
             Text("Action state", style = MaterialTheme.typography.titleMedium)
             Text("${action.kind.label}: ${action.state.label}")
-            val message = when (action.state) {
-                MobileActionStateWire.Available -> "Action controls arrive in the next epic."
-                MobileActionStateWire.AlreadyHandled -> "Already handled on the host."
-                MobileActionStateWire.Stale -> "State is stale; refresh before acting."
-                MobileActionStateWire.MissingRequest -> "The original request is missing."
-                MobileActionStateWire.MissingTarget -> "The target resource is missing."
-                MobileActionStateWire.Unsupported -> "This action is not supported on Android yet."
+            val message = unavailable?.message ?: when {
+                controls.isEmpty() && action.kind == MobileActionKindWire.UserQuestion ->
+                    "No one-tap question options are available."
+                controls.isEmpty() -> "No direct Android actions are available."
+                else -> "Choose an action below."
             }
             Text(message)
             action.planFile?.let { Text("Plan: $it") }
             action.responseDir?.let { Text("Response dir: $it") }
+            if (controls.isNotEmpty()) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    controls.forEach { control ->
+                        val enabled = actionUiState !is ActionUiState.Submitting
+                        if (control.requiresConfirmation) {
+                            OutlinedButton(
+                                onClick = { onAction(control) },
+                                enabled = enabled,
+                            ) {
+                                Text(control.label)
+                            }
+                        } else {
+                            Button(
+                                onClick = { onAction(control) },
+                                enabled = enabled,
+                            ) {
+                                Text(control.label)
+                            }
+                        }
+                    }
+                }
+            } else if (unavailable?.canRefresh == true) {
+                OutlinedButton(onClick = onRefresh) {
+                    Text("Refresh")
+                }
+            }
+            pendingConfirmation?.let { control ->
+                Surface(
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.75f),
+                    shape = MaterialTheme.shapes.small,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Column(
+                        modifier = Modifier.padding(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text("Confirm ${control.label.lowercase()}?", fontWeight = FontWeight.Medium)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(onClick = { onConfirmAction(control) }) {
+                                Text("Confirm")
+                            }
+                            OutlinedButton(onClick = onCancelAction) {
+                                Text("Cancel")
+                            }
+                        }
+                    }
+                }
+            }
+            actionUiState?.let { state ->
+                ActionResultAffordance(
+                    state = state,
+                    onRefresh = onRefresh,
+                    onRetryAction = onRetryAction,
+                    onOpenSettings = onOpenSettings,
+                )
+            }
         }
     }
+}
+
+@Composable
+private fun ActionResultAffordance(
+    state: ActionUiState,
+    onRefresh: () -> Unit,
+    onRetryAction: () -> Unit,
+    onOpenSettings: () -> Unit,
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
+        shape = MaterialTheme.shapes.small,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            when (state) {
+                is ActionUiState.Submitting -> {
+                    Text("Submitting ${state.label.lowercase()}...", fontWeight = FontWeight.Medium)
+                }
+                is ActionUiState.Success -> {
+                    val result = state.result.result
+                    Text("Submitted action", fontWeight = FontWeight.Medium)
+                    Text(result.message ?: "${result.actionKind.label}: ${result.state.label}")
+                    Text("Response: ${result.responseFile}")
+                }
+                is ActionUiState.Failure -> {
+                    Text("Action failed", fontWeight = FontWeight.Medium)
+                    Text(state.failure.message, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (state.failure.canRefresh) {
+                            OutlinedButton(onClick = onRefresh) {
+                                Text("Refresh")
+                            }
+                        }
+                        if (state.failure.canRetry) {
+                            OutlinedButton(onClick = onRetryAction) {
+                                Text("Retry")
+                            }
+                        }
+                        if (state.failure.routeToSettings) {
+                            Button(onClick = onOpenSettings) {
+                                Text("Settings")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private sealed interface ActionUiState {
+    data class Submitting(val label: String) : ActionUiState
+    data class Success(val result: ActionSubmissionState.Success) : ActionUiState
+    data class Failure(val failure: ActionFailure) : ActionUiState
 }
 
 private val MobileActionKindWire.label: String
@@ -344,6 +558,59 @@ private fun StaleNotificationDetailPreview() {
         NotificationDetailScreen(
             notificationId = "plan0001-review",
             initialState = NotificationDetailState.Ready(NotificationUiFixtures.detail, stale = true),
+        )
+    }
+}
+
+@Preview(showBackground = true, widthDp = 360)
+@Composable
+private fun AlreadyHandledNotificationDetailPreview() {
+    SaseMobileTheme {
+        NotificationDetailScreen(
+            notificationId = "plan0001-review",
+            initialState = NotificationDetailState.Ready(
+                NotificationUiFixtures.detail.copy(
+                    action = NotificationUiFixtures.detail.action.copy(
+                        state = MobileActionStateWire.AlreadyHandled,
+                    ),
+                ),
+                stale = false,
+            ),
+        )
+    }
+}
+
+@Preview(showBackground = true, widthDp = 360)
+@Composable
+private fun MissingActionNotificationDetailPreview() {
+    SaseMobileTheme {
+        NotificationDetailScreen(
+            notificationId = "plan0001-review",
+            initialState = NotificationDetailState.Ready(
+                NotificationUiFixtures.detail.copy(
+                    action = NotificationUiFixtures.detail.action.copy(identity = null),
+                ),
+                stale = false,
+            ),
+        )
+    }
+}
+
+@Preview(showBackground = true, widthDp = 360)
+@Composable
+private fun UnsupportedActionNotificationDetailPreview() {
+    SaseMobileTheme {
+        NotificationDetailScreen(
+            notificationId = "error001-digest",
+            initialState = NotificationDetailState.Ready(
+                NotificationUiFixtures.detail.copy(
+                    action = NotificationUiFixtures.detail.action.copy(
+                        kind = MobileActionKindWire.Unsupported,
+                        state = MobileActionStateWire.Unsupported,
+                    ),
+                ),
+                stale = false,
+            ),
         )
     }
 }

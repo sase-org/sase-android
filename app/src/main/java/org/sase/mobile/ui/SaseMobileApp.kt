@@ -28,6 +28,14 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import kotlinx.coroutines.launch
 import org.sase.mobile.R
+import org.sase.mobile.data.actions.AndroidActionRepositoryFactory
+import org.sase.mobile.data.actions.NotificationActionController
+import org.sase.mobile.data.agents.AgentRepository
+import org.sase.mobile.data.agents.AndroidAgentRepositoryFactory
+import org.sase.mobile.data.helpers.AndroidHelperRepositoryFactory
+import org.sase.mobile.data.helpers.AndroidUpdateRepositoryFactory
+import org.sase.mobile.data.helpers.HelperRepository
+import org.sase.mobile.data.helpers.UpdateController
 import org.sase.mobile.data.notifications.AndroidNotificationRepositoryFactory
 import org.sase.mobile.data.notifications.NotificationRepository
 import org.sase.mobile.data.session.AndroidSessionRepositoryFactory
@@ -35,9 +43,12 @@ import org.sase.mobile.data.session.PairedHostSession
 import org.sase.mobile.data.session.SessionController
 import org.sase.mobile.data.session.SessionStatus
 import org.sase.mobile.data.session.SessionUiState
+import org.sase.mobile.ui.agents.AgentsScreen
+import org.sase.mobile.ui.helpers.HelpersScreen
 import org.sase.mobile.ui.inbox.InboxScreen
 import org.sase.mobile.ui.notification.NotificationDetailScreen
 import org.sase.mobile.ui.settings.SettingsScreen
+import org.sase.mobile.ui.update.UpdateScreen
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -45,30 +56,55 @@ fun SaseMobileApp(
     modifier: Modifier = Modifier,
     sessionController: SessionController? = null,
     notificationRepository: NotificationRepository? = null,
+    actionController: NotificationActionController? = null,
+    agentRepository: AgentRepository? = null,
+    helperRepository: HelperRepository? = null,
+    updateController: UpdateController? = null,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val controller = sessionController ?: remember(context.applicationContext, scope) {
         AndroidSessionRepositoryFactory.create(context.applicationContext, scope)
     }
-    val notifications = notificationRepository ?: remember(context.applicationContext, scope) {
-        AndroidNotificationRepositoryFactory.create(context.applicationContext, scope)
+    val updates = updateController ?: remember(context.applicationContext, scope) {
+        AndroidUpdateRepositoryFactory.create(context.applicationContext, scope)
+    }
+    val agents = agentRepository ?: remember(context.applicationContext, scope) {
+        AndroidAgentRepositoryFactory.create(context.applicationContext, scope)
+    }
+    val helpers = helperRepository ?: remember(context.applicationContext) {
+        AndroidHelperRepositoryFactory.create(context.applicationContext)
+    }
+    val notifications = notificationRepository ?: remember(context.applicationContext, scope, agents, updates) {
+        AndroidNotificationRepositoryFactory.create(
+            context = context.applicationContext,
+            scope = scope,
+            onAgentsChanged = { payload -> agents.handleAgentsChanged(payload) },
+            onHelpersChanged = { payload -> updates.handleHelpersChanged(payload) },
+        )
+    }
+    val actions = actionController ?: remember(context.applicationContext, notifications) {
+        AndroidActionRepositoryFactory.create(context.applicationContext, notifications)
     }
     val navController = rememberNavController()
-    val destinations = listOf(SaseDestination.Inbox, SaseDestination.Settings)
+    val destinations = listOf(SaseDestination.Inbox, SaseDestination.Agents, SaseDestination.Settings)
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
     val inboxState by notifications.inbox.collectAsState()
     val connectionState by notifications.connection.collectAsState()
     val refreshState by notifications.refresh.collectAsState()
+    val helperEventVersion by notifications.helperEvents.collectAsState()
+    val agentsState by agents.state.collectAsState()
     val sessionState by controller.state.collectAsState()
     val pairedHostKey = notificationHostKey(sessionState)
 
     LaunchedEffect(notifications, pairedHostKey) {
         if (pairedHostKey == null) {
             notifications.stop()
+            agents.stop()
         } else {
             notifications.start()
+            scope.launch { agents.refresh() }
         }
     }
     DisposableEffect(notifications) {
@@ -142,11 +178,61 @@ fun SaseMobileApp(
                 NotificationDetailScreen(
                     notificationId = notificationId,
                     repository = notifications,
+                    actionController = actions,
                     onBack = { navController.popBackStack() },
+                    onOpenSettings = {
+                        navController.navigate(SaseDestination.Settings.route) {
+                            launchSingleTop = true
+                        }
+                    },
+                )
+            }
+            composable(SaseDestination.Agents.route) {
+                AgentsScreen(
+                    state = agentsState,
+                    onRefresh = {
+                        scope.launch { agents.refresh() }
+                    },
+                    onKill = { name ->
+                        scope.launch { agents.killAgent(name) }
+                    },
+                    onRetry = { name ->
+                        scope.launch { agents.retryAgent(name) }
+                    },
+                    onClearActionResult = { agents.clearActionResult() },
+                    onOpenSettings = {
+                        navController.navigate(SaseDestination.Settings.route) {
+                            launchSingleTop = true
+                        }
+                    },
                 )
             }
             composable(SaseDestination.Settings.route) {
-                SettingsScreen(controller = controller)
+                SettingsScreen(
+                    controller = controller,
+                    onOpenUpdate = {
+                        navController.navigate(SaseDestination.Update.route) {
+                            launchSingleTop = true
+                        }
+                    },
+                    onOpenHelpers = {
+                        navController.navigate(SaseDestination.Helpers.route) {
+                            launchSingleTop = true
+                        }
+                    },
+                )
+            }
+            composable(SaseDestination.Update.route) {
+                UpdateScreen(
+                    controller = updates,
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            composable(SaseDestination.Helpers.route) {
+                HelpersScreen(
+                    repository = helpers,
+                    helperEventVersion = helperEventVersion,
+                )
             }
         }
     }
@@ -176,10 +262,28 @@ sealed interface SaseDestination {
         override val iconResId = R.drawable.ic_inbox_24
     }
 
+    data object Agents : SaseDestination {
+        override val route = "agents"
+        override val label = "Agents"
+        override val iconResId = R.drawable.ic_terminal_24
+    }
+
     data object Settings : SaseDestination {
         override val route = "settings"
         override val label = "Settings"
         override val iconResId = R.drawable.ic_settings_24
+    }
+
+    data object Update : SaseDestination {
+        override val route = "update"
+        override val label = "Update"
+        override val iconResId = R.drawable.ic_settings_24
+    }
+
+    data object Helpers : SaseDestination {
+        override val route = "helpers"
+        override val label = "Helpers"
+        override val iconResId = R.drawable.ic_helpers_24
     }
 
     data object NotificationDetail {

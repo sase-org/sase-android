@@ -12,6 +12,7 @@ import org.junit.Test
 import org.sase.mobile.data.api.GatewayApiClient
 import org.sase.mobile.data.api.GatewayFixturePaths
 import org.sase.mobile.data.api.GatewaySseClient
+import org.sase.mobile.data.api.dto.HelpersChangedEventPayloadWire
 import org.sase.mobile.data.api.dto.GatewayJson
 import org.sase.mobile.data.api.dto.MobileNotificationListResponseWire
 import org.sase.mobile.data.api.readResource
@@ -155,6 +156,25 @@ class NotificationRepositoryTest {
     }
 
     @Test
+    fun helpersChangedEventIsForwardedWithStructuredPayload() = runTest {
+        FakeGateway().use { gateway ->
+            gateway.enqueueSse(readResource(GatewayFixturePaths.EventHelpersChanged))
+            val helperEvents = mutableListOf<HelpersChangedEventPayloadWire>()
+            val repository = repository(
+                gateway.baseUrl,
+                onHelpersChanged = { payload -> helperEvents += payload },
+            )
+
+            repository.runSseLoop(maxConnections = 1)
+
+            assertThat(helperEvents).hasSize(1)
+            assertThat(helperEvents.single().helper).isEqualTo("update")
+            assertThat(helperEvents.single().jobId).isEqualTo("update-job-1")
+            assertThat(repository.helperEvents.value).isEqualTo(1)
+        }
+    }
+
+    @Test
     fun markReadAndDismissUpdateLocalCacheFromMutationResponses() = runTest {
         FakeGateway().use { gateway ->
             gateway.enqueueJson(MutationReadResponse)
@@ -180,6 +200,7 @@ class NotificationRepositoryTest {
         baseUrl: HttpUrl = GatewayApiClient.normalizeBaseUrl("http://127.0.0.1:7629/"),
         sessionStorage: InMemoryHostSessionStorage = InMemoryHostSessionStorage(pairedSession(baseUrl)),
         cache: NotificationCache = InMemoryNotificationCache(),
+        onHelpersChanged: suspend (HelpersChangedEventPayloadWire) -> Unit = {},
     ): NotificationRepository {
         return NotificationRepository(
             sessionStorage = sessionStorage,
@@ -201,6 +222,7 @@ class NotificationRepositoryTest {
             },
             clock = Clock.fixed(Now, ZoneOffset.UTC),
             delayProvider = { _ -> },
+            onHelpersChanged = onHelpersChanged,
             scope = this,
         )
     }

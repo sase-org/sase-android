@@ -8,6 +8,8 @@ import org.sase.mobile.data.api.dto.MobileAttachmentKindWire
 import org.sase.mobile.data.api.dto.MobileAttachmentManifestWire
 import org.sase.mobile.data.api.dto.MobileNotificationCardWire
 import org.sase.mobile.data.api.dto.MobileNotificationDetailResponseWire
+import org.sase.mobile.data.api.dto.PendingActionIdentityWire
+import org.sase.mobile.data.api.dto.PendingActionPrefixResolutionWire
 import org.sase.mobile.data.notifications.NotificationInboxState
 
 object NotificationUiFixtures {
@@ -128,6 +130,12 @@ object NotificationUiFixtures {
         ),
         action = MobileActionDetailWire(
             kind = MobileActionKindWire.PlanApproval,
+            identity = PendingActionIdentityWire(
+                notificationId = "plan0001-review",
+                prefix = "plan0001",
+                prefixLen = 8,
+                resolution = PendingActionPrefixResolutionWire.UniquePrefix,
+            ),
             state = MobileActionStateWire.Available,
             responseDir = "~/.sase/responses/plan0001",
             planFile = "~/plans/plan.md",
