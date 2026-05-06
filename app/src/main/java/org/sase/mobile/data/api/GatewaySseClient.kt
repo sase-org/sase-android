@@ -1,7 +1,11 @@
 package org.sase.mobile.data.api
 
 import java.io.IOException
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.job
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerializationException
 import okhttp3.HttpUrl
@@ -48,8 +52,14 @@ class GatewaySseClient(
             .build()
 
         return withContext(Dispatchers.IO) {
+            val call = client.newCall(request)
+            val cancellation = currentCoroutineContext().job.invokeOnCompletion { cause ->
+                if (cause is CancellationException) {
+                    call.cancel()
+                }
+            }
             try {
-                client.newCall(request).execute().use { response ->
+                call.execute().use { response ->
                     val body = response.body
                     if (!response.isSuccessful) {
                         return@withContext decodeHttpError(response.code, body?.string().orEmpty())
@@ -90,7 +100,12 @@ class GatewaySseClient(
                     GatewaySseResult.Success(emptyList())
                 }
             } catch (error: IOException) {
+                if (!currentCoroutineContext().isActive) {
+                    throw CancellationException("SSE request cancelled").also { it.initCause(error) }
+                }
                 GatewaySseResult.Failure(error.toGatewayTransportError())
+            } finally {
+                cancellation.dispose()
             }
         }
     }

@@ -3,7 +3,6 @@ package org.sase.mobile
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
-import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -16,7 +15,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
@@ -82,7 +80,6 @@ class AndroidSmokeTest {
                         )
                     },
                     clock = Clock.fixed(Instant.parse("2026-05-06T16:01:00Z"), ZoneOffset.UTC),
-                    delayProvider = { _ -> },
                     scope = scope,
                 )
 
@@ -108,20 +105,17 @@ class AndroidSmokeTest {
                 composeRule.onNodeWithText("Paired host").assertIsDisplayed()
 
                 composeRule.onNodeWithText("Inbox").performClick()
-                composeRule.onNodeWithContentDescription("Refresh inbox").performClick()
-                composeRule.waitUntil { notificationRepository.inbox.value.cards.isNotEmpty() }
+                composeRule.waitUntil(timeoutMillis = 5_000) {
+                    notificationRepository.inbox.value.cards.isNotEmpty()
+                }
+                composeRule.waitUntil(timeoutMillis = 5_000) {
+                    notificationRepository.inbox.value.lastEventId == SmokeGateway.ResyncEventId
+                }
                 composeRule.onNodeWithText("Plan review waiting").performClick()
                 composeRule.waitUntilText("Review the plan before running the coder.")
 
                 composeRule.onNodeWithText("Mark read").performClick()
                 composeRule.waitUntilText("Marked read")
-
-                runBlocking {
-                    notificationRepository.runSseLoop(maxConnections = 1)
-                }
-                composeRule.waitUntil {
-                    notificationRepository.inbox.value.lastEventId == SmokeGateway.ResyncEventId
-                }
 
                 composeRule.onNodeWithText("Settings").performClick()
                 composeRule.onNodeWithTag("forget_host_button").performClick()

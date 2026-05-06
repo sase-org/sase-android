@@ -3,6 +3,7 @@ package org.sase.mobile.data.notifications
 import java.time.Clock
 import java.time.Instant
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -45,11 +46,15 @@ class NotificationRepository(
     private val mutableRefresh = MutableStateFlow(NotificationRefreshState.Idle)
     val refresh: StateFlow<NotificationRefreshState> = mutableRefresh.asStateFlow()
 
+    @Volatile
     private var stopped = false
+    private var activeJob: Job? = null
 
+    @Synchronized
     fun start() {
+        activeJob?.cancel()
         stopped = false
-        scope.launch {
+        activeJob = scope.launch {
             loadCachedState()
             val session = sessionStorage.read()
             if (session == null) {
@@ -62,8 +67,11 @@ class NotificationRepository(
         }
     }
 
+    @Synchronized
     fun stop() {
         stopped = true
+        activeJob?.cancel()
+        activeJob = null
         mutableConnection.value = NotificationConnectionState.Stopped
     }
 

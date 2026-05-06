@@ -31,7 +31,10 @@ import org.sase.mobile.R
 import org.sase.mobile.data.notifications.AndroidNotificationRepositoryFactory
 import org.sase.mobile.data.notifications.NotificationRepository
 import org.sase.mobile.data.session.AndroidSessionRepositoryFactory
+import org.sase.mobile.data.session.PairedHostSession
 import org.sase.mobile.data.session.SessionController
+import org.sase.mobile.data.session.SessionStatus
+import org.sase.mobile.data.session.SessionUiState
 import org.sase.mobile.ui.inbox.InboxScreen
 import org.sase.mobile.ui.notification.NotificationDetailScreen
 import org.sase.mobile.ui.settings.SettingsScreen
@@ -58,9 +61,15 @@ fun SaseMobileApp(
     val inboxState by notifications.inbox.collectAsState()
     val connectionState by notifications.connection.collectAsState()
     val refreshState by notifications.refresh.collectAsState()
+    val sessionState by controller.state.collectAsState()
+    val pairedHostKey = notificationHostKey(sessionState)
 
-    LaunchedEffect(notifications) {
-        notifications.start()
+    LaunchedEffect(notifications, pairedHostKey) {
+        if (pairedHostKey == null) {
+            notifications.stop()
+        } else {
+            notifications.start()
+        }
     }
     DisposableEffect(notifications) {
         onDispose { notifications.stop() }
@@ -142,6 +151,19 @@ fun SaseMobileApp(
         }
     }
 }
+
+private fun notificationHostKey(state: SessionUiState): String? {
+    val session = when (val status = state.status) {
+        is SessionStatus.Paired -> status.session
+        is SessionStatus.AuthExpired -> status.session
+        is SessionStatus.GatewayUnavailable -> status.session
+        SessionStatus.Unpaired -> null
+        else -> state.savedSession
+    }
+    return session?.notificationHostKey()
+}
+
+private fun PairedHostSession.notificationHostKey(): String = "$baseUrl|$deviceId"
 
 sealed interface SaseDestination {
     val route: String

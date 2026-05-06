@@ -4,6 +4,7 @@ import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
@@ -58,6 +59,40 @@ class NotificationRepositoryTest {
             assertThat(repository.inbox.value.isStale).isFalse()
             assertThat(cache.read().sessionSummary?.deviceId).isEqualTo("dev_pixel")
             assertThat(cache.read().syncState.lastFullRefreshAt).isEqualTo(Now.toString())
+        }
+    }
+
+    @Test
+    fun startCanRestartAfterSessionIsAddedAndPerformFullRefresh() = runTest {
+        FakeGateway().use { gateway ->
+            gateway.enqueueJson(readResource(GatewayFixturePaths.NotificationsMixed))
+            gateway.enqueueJson(
+                body = readResource(GatewayFixturePaths.ErrorFixtures.first()),
+                statusCode = 401,
+            )
+            val storage = InMemoryHostSessionStorage()
+            val repository = repository(
+                gateway.baseUrl,
+                sessionStorage = storage,
+            )
+
+            repository.start()
+            advanceUntilIdle()
+
+            assertThat(repository.connection.value).isEqualTo(NotificationConnectionState.LoggedOut)
+            assertThat(gateway.requestCount).isEqualTo(0)
+
+            storage.write(pairedSession(gateway.baseUrl))
+            repository.start()
+
+            val refreshRequest = gateway.takeRequest()
+            val sseRequest = gateway.takeRequest()
+            advanceUntilIdle()
+
+            assertThat(refreshRequest.path).isEqualTo("/api/v1/notifications?include_dismissed=true")
+            assertThat(sseRequest.path).isEqualTo("/api/v1/events")
+            assertThat(repository.inbox.value.cards).hasSize(7)
+            repository.stop()
         }
     }
 
@@ -143,10 +178,11 @@ class NotificationRepositoryTest {
 
     private fun repository(
         baseUrl: HttpUrl = GatewayApiClient.normalizeBaseUrl("http://127.0.0.1:7629/"),
+        sessionStorage: InMemoryHostSessionStorage = InMemoryHostSessionStorage(pairedSession(baseUrl)),
         cache: NotificationCache = InMemoryNotificationCache(),
     ): NotificationRepository {
         return NotificationRepository(
-            sessionStorage = InMemoryHostSessionStorage(pairedSession(baseUrl)),
+            sessionStorage = sessionStorage,
             tokenVault = InMemoryTokenVault("token-secret"),
             cache = cache,
             clientFactory = { url, tokenProvider ->
