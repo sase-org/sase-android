@@ -1,6 +1,8 @@
 package org.sase.mobile.data.agents
 
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.test.runTest
 import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
@@ -11,6 +13,7 @@ import org.sase.mobile.data.api.GatewaySseClient
 import org.sase.mobile.data.api.dto.AgentsChangedEventPayloadWire
 import org.sase.mobile.data.api.dto.ApiErrorCodeWire
 import org.sase.mobile.data.api.dto.ApiErrorWire
+import org.sase.mobile.data.api.dto.MobileAgentTextLaunchRequestWire
 import org.sase.mobile.data.api.readResource
 import org.sase.mobile.data.session.InMemoryHostSessionStorage
 import org.sase.mobile.data.session.InMemoryTokenVault
@@ -52,6 +55,40 @@ class AgentRepositoryTest {
             assertThat(gateway.takeRequest().path).isEqualTo("/api/v1/agents?include_recent=true")
             assertThat(gateway.takeRequest().path).isEqualTo("/api/v1/agents/resume-options")
             assertThat(gateway.takeRequest().path).isEqualTo("/api/v1/agents/mobile-failed/retry")
+            assertThat(gateway.takeRequest().path).isEqualTo("/api/v1/agents?include_recent=true")
+            assertThat(gateway.takeRequest().path).isEqualTo("/api/v1/agents/resume-options")
+        }
+    }
+
+    @Test
+    fun launchAgentPreservesPromptDirectivesAndStoresRecentResult() = runTest {
+        FakeGateway().use { gateway ->
+            gateway.installEpicSixHarness()
+            val repository = repository(gateway.baseUrl)
+            val prompt = "#gh:mobile\n%runtime codex\nKeep 100% of #bd/work_phase_bead:sase-26.6.5"
+
+            val result = repository.launchAgent(
+                MobileAgentTextLaunchRequestWire(
+                    prompt = prompt,
+                    requestId = "launch-android-1",
+                    displayName = "Mobile launch",
+                    provider = "openai",
+                    runtime = "codex",
+                    model = "gpt-5.4",
+                    project = "sase",
+                ),
+            )
+
+            assertThat(result).isEqualTo(AgentActionState.Succeeded("Launched: mobile-launch-1"))
+            assertThat(repository.state.value.recentLaunchResults).hasSize(1)
+            assertThat(repository.state.value.recentLaunchResults.single().slots).hasSize(2)
+
+            val launchRequest = gateway.takeRequest()
+            val launchBody = launchRequest.body.readUtf8()
+            assertThat(launchRequest.path).isEqualTo("/api/v1/agents/launch")
+            assertThat(launchBody).contains("\"prompt\":\"#gh:mobile\\n%runtime codex\\nKeep 100%")
+            assertThat(launchBody).contains("\"device_id\":\"dev_pixel\"")
+            assertThat(launchBody).contains("\"request_id\":\"launch-android-1\"")
             assertThat(gateway.takeRequest().path).isEqualTo("/api/v1/agents?include_recent=true")
             assertThat(gateway.takeRequest().path).isEqualTo("/api/v1/agents/resume-options")
         }
@@ -147,7 +184,7 @@ class AgentRepositoryTest {
                 )
             },
             delayProvider = { _ -> },
-            scope = this,
+            scope = CoroutineScope(SupervisorJob()),
         )
     }
 

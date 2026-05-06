@@ -14,8 +14,11 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -46,6 +49,7 @@ import org.sase.mobile.data.session.SessionUiState
 import org.sase.mobile.ui.agents.AgentsScreen
 import org.sase.mobile.ui.helpers.HelpersScreen
 import org.sase.mobile.ui.inbox.InboxScreen
+import org.sase.mobile.ui.launch.LaunchScreen
 import org.sase.mobile.ui.notification.NotificationDetailScreen
 import org.sase.mobile.ui.settings.SettingsScreen
 import org.sase.mobile.ui.update.UpdateScreen
@@ -87,7 +91,13 @@ fun SaseMobileApp(
         AndroidActionRepositoryFactory.create(context.applicationContext, notifications)
     }
     val navController = rememberNavController()
-    val destinations = listOf(SaseDestination.Inbox, SaseDestination.Agents, SaseDestination.Settings)
+    val destinations = listOf(
+        SaseDestination.Inbox,
+        SaseDestination.Launch,
+        SaseDestination.Agents,
+        SaseDestination.Settings,
+    )
+    var launchPrefillPrompt by rememberSaveable { mutableStateOf<String?>(null) }
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
     val inboxState by notifications.inbox.collectAsState()
@@ -199,7 +209,33 @@ fun SaseMobileApp(
                     onRetry = { name ->
                         scope.launch { agents.retryAgent(name) }
                     },
+                    onOpenLaunchPrompt = { prompt ->
+                        launchPrefillPrompt = prompt
+                        navController.navigate(SaseDestination.Launch.route) {
+                            launchSingleTop = true
+                        }
+                    },
                     onClearActionResult = { agents.clearActionResult() },
+                    onOpenSettings = {
+                        navController.navigate(SaseDestination.Settings.route) {
+                            launchSingleTop = true
+                        }
+                    },
+                )
+            }
+            composable(SaseDestination.Launch.route) {
+                LaunchScreen(
+                    state = agentsState,
+                    onLaunch = { request -> agents.launchAgent(request) },
+                    helperRepository = helpers,
+                    helperEventVersion = helperEventVersion,
+                    prefillPrompt = launchPrefillPrompt,
+                    onPrefillConsumed = { launchPrefillPrompt = null },
+                    onOpenAgents = {
+                        navController.navigate(SaseDestination.Agents.route) {
+                            launchSingleTop = true
+                        }
+                    },
                     onOpenSettings = {
                         navController.navigate(SaseDestination.Settings.route) {
                             launchSingleTop = true
@@ -266,6 +302,12 @@ sealed interface SaseDestination {
         override val route = "agents"
         override val label = "Agents"
         override val iconResId = R.drawable.ic_terminal_24
+    }
+
+    data object Launch : SaseDestination {
+        override val route = "launch"
+        override val label = "Launch"
+        override val iconResId = R.drawable.ic_play_arrow_24
     }
 
     data object Settings : SaseDestination {

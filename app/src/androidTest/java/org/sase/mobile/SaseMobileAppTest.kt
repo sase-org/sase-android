@@ -32,6 +32,13 @@ class SaseMobileAppTest {
     }
 
     @Test
+    fun canOpenLaunchDestination() {
+        composeRule.onNodeWithText("Launch").performClick()
+
+        composeRule.onNodeWithTag("launch_screen").assertIsDisplayed()
+    }
+
+    @Test
     fun canOpenUpdateDestinationFromSettings() {
         composeRule.onNodeWithText("Settings").performClick()
         composeRule.onNodeWithTag("open_update_button").performClick()

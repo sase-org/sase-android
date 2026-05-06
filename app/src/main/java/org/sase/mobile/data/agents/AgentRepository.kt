@@ -19,10 +19,12 @@ import org.sase.mobile.data.api.dto.EventPayloadTypeWire
 import org.sase.mobile.data.api.dto.EventRecordWire
 import org.sase.mobile.data.api.dto.MobileAgentKillRequestWire
 import org.sase.mobile.data.api.dto.MobileAgentLaunchResultWire
+import org.sase.mobile.data.api.dto.MobileAgentLaunchSlotStatusWire
 import org.sase.mobile.data.api.dto.MobileAgentListRequestWire
 import org.sase.mobile.data.api.dto.MobileAgentResumeOptionWire
 import org.sase.mobile.data.api.dto.MobileAgentRetryRequestWire
 import org.sase.mobile.data.api.dto.MobileAgentSummaryWire
+import org.sase.mobile.data.api.dto.MobileAgentTextLaunchRequestWire
 import org.sase.mobile.data.session.HostSessionStorage
 import org.sase.mobile.data.session.PairedHostSession
 import org.sase.mobile.data.session.TokenVault
@@ -124,6 +126,24 @@ class AgentRepository(
                 val primary = result.value.launch.primary?.name ?: result.value.sourceAgent
                 refresh(AgentsRefreshReason.ActionCompleted)
                 publishAction(AgentActionState.Succeeded("Retry launched: $primary"))
+            }
+
+            is GatewayApiResult.Failure -> publishAction(handleActionFailure(session, result.error))
+        }
+    }
+
+    suspend fun launchAgent(request: MobileAgentTextLaunchRequestWire): AgentActionState {
+        val session = sessionStorage.read() ?: return publishAction(AgentActionState.Failed("Not paired"))
+        val cleanRequest = request.copy(deviceId = session.deviceId)
+        mutableState.value = mutableState.value.copy(action = AgentActionState.Running("Launching agent"))
+        return when (val result = client(session).launchAgent(cleanRequest)) {
+            is GatewayApiResult.Success -> {
+                val launch = result.value
+                mutableState.value = mutableState.value.copy(
+                    recentLaunchResults = listOf(launch) + mutableState.value.recentLaunchResults.take(4),
+                )
+                refresh(AgentsRefreshReason.ActionCompleted)
+                publishAction(AgentActionState.Succeeded(launch.summaryMessage()))
             }
 
             is GatewayApiResult.Failure -> publishAction(handleActionFailure(session, result.error))
@@ -335,4 +355,16 @@ fun GatewayApiError.toAgentFailure(): AgentFailure {
 private fun GatewayApiError.isUnauthorized(): Boolean {
     return this is GatewayApiError.Http &&
         (statusCode == 401 || apiError?.code == ApiErrorCodeWire.Unauthorized)
+}
+
+private fun MobileAgentLaunchResultWire.summaryMessage(): String {
+    val launchedNames = slots.mapNotNull { slot ->
+        slot.name?.takeIf { slot.status == MobileAgentLaunchSlotStatusWire.Launched }
+    }
+    val primaryMessage = primary?.message
+    return when {
+        launchedNames.isNotEmpty() -> "Launched: ${launchedNames.joinToString()}"
+        primaryMessage != null -> primaryMessage
+        else -> "Launch request completed with ${slots.size} slot(s)"
+    }
 }

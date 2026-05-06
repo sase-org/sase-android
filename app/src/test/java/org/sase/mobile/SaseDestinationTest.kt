@@ -12,14 +12,15 @@ class SaseDestinationTest {
     }
 
     @Test
-    fun bottomNavigationStartsWithInboxAgentsAndSettings() {
+    fun bottomNavigationStartsWithInboxLaunchAgentsAndSettings() {
         val routes = listOf(
             SaseDestination.Inbox.route,
+            SaseDestination.Launch.route,
             SaseDestination.Agents.route,
             SaseDestination.Settings.route,
         )
 
-        assertThat(routes).containsExactly("inbox", "agents", "settings").inOrder()
+        assertThat(routes).containsExactly("inbox", "launch", "agents", "settings").inOrder()
     }
 
     @Test

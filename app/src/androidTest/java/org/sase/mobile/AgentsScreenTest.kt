@@ -47,6 +47,28 @@ class AgentsScreenTest {
     }
 
     @Test
+    fun opensLaunchFromDirectResumeOption() {
+        var launchPrompt: String? = null
+        composeRule.setContent {
+            SaseMobileTheme {
+                AgentsScreen(
+                    state = mixedState(),
+                    onRefresh = {},
+                    onKill = {},
+                    onRetry = {},
+                    onClearActionResult = {},
+                    onOpenSettings = {},
+                    onOpenLaunchPrompt = { launchPrompt = it },
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Launch").performClick()
+
+        assertEquals("#resume:mobile-demo", launchPrompt)
+    }
+
+    @Test
     fun confirmsKillAndRetryActions() {
         var killed: String? = null
         var retried: String? = null

@@ -68,6 +68,7 @@ fun AgentsScreen(
     onClearActionResult: () -> Unit,
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
+    onOpenLaunchPrompt: (String) -> Unit = {},
 ) {
     var selectedFilter by remember { mutableStateOf(AgentFilter.Running) }
     var pendingAction by remember { mutableStateOf<PendingAgentAction?>(null) }
@@ -123,6 +124,11 @@ fun AgentsScreen(
 
         ResumeOptions(
             options = state.resumeOptions,
+            onOpenLaunchPrompt = onOpenLaunchPrompt,
+        )
+
+        RecentLaunchResults(
+            results = state.recentLaunchResults,
         )
 
         when {
@@ -246,6 +252,7 @@ private fun DismissibleMessage(
 @Composable
 private fun ResumeOptions(
     options: List<MobileAgentResumeOptionWire>,
+    onOpenLaunchPrompt: (String) -> Unit,
 ) {
     if (options.isEmpty()) {
         return
@@ -274,6 +281,12 @@ private fun ResumeOptions(
                         )
                     },
                 )
+                if (option.directLaunchSupported) {
+                    AssistChip(
+                        onClick = { onOpenLaunchPrompt(option.promptText) },
+                        label = { Text("Launch") },
+                    )
+                }
                 AssistChip(
                     onClick = {
                         val intent = Intent(Intent.ACTION_SEND)
@@ -282,6 +295,34 @@ private fun ResumeOptions(
                         context.startActivity(Intent.createChooser(intent, option.label))
                     },
                     label = { Text("Share") },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecentLaunchResults(
+    results: List<org.sase.mobile.data.api.dto.MobileAgentLaunchResultWire>,
+) {
+    if (results.isEmpty()) {
+        return
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            text = "Recent Launches",
+            style = MaterialTheme.typography.titleSmall,
+        )
+        results.take(3).forEach { result ->
+            result.slots.forEach { slot ->
+                AssistChip(
+                    onClick = {},
+                    label = {
+                        Text(
+                            listOfNotNull(slot.slotId, slot.name, slot.status.name.lowercase(), slot.message)
+                                .joinToString(" - "),
+                        )
+                    },
                 )
             }
         }
