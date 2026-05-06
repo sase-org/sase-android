@@ -10,6 +10,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -23,7 +26,12 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import kotlinx.coroutines.launch
 import org.sase.mobile.R
+import org.sase.mobile.data.notifications.AndroidNotificationRepositoryFactory
+import org.sase.mobile.data.notifications.NotificationRepository
+import org.sase.mobile.data.session.AndroidSessionRepositoryFactory
+import org.sase.mobile.data.session.SessionController
 import org.sase.mobile.ui.inbox.InboxScreen
 import org.sase.mobile.ui.notification.NotificationDetailScreen
 import org.sase.mobile.ui.settings.SettingsScreen
@@ -33,16 +41,30 @@ import org.sase.mobile.ui.settings.SettingsScreen
 fun SaseMobileApp(
     modifier: Modifier = Modifier,
     sessionController: SessionController? = null,
+    notificationRepository: NotificationRepository? = null,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val controller = sessionController ?: remember(context.applicationContext, scope) {
         AndroidSessionRepositoryFactory.create(context.applicationContext, scope)
     }
+    val notifications = notificationRepository ?: remember(context.applicationContext, scope) {
+        AndroidNotificationRepositoryFactory.create(context.applicationContext, scope)
+    }
     val navController = rememberNavController()
     val destinations = listOf(SaseDestination.Inbox, SaseDestination.Settings)
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
+    val inboxState by notifications.inbox.collectAsState()
+    val connectionState by notifications.connection.collectAsState()
+    val refreshState by notifications.refresh.collectAsState()
+
+    LaunchedEffect(notifications) {
+        notifications.start()
+    }
+    DisposableEffect(notifications) {
+        onDispose { notifications.stop() }
+    }
 
     Scaffold(
         modifier = modifier,
@@ -88,16 +110,31 @@ fun SaseMobileApp(
         ) {
             composable(SaseDestination.Inbox.route) {
                 InboxScreen(
+                    state = inboxState,
+                    connectionState = connectionState,
+                    refreshState = refreshState,
+                    onRefresh = {
+                        scope.launch { notifications.fullRefresh() }
+                    },
                     onOpenNotification = { notificationId ->
                         navController.navigate(SaseDestination.NotificationDetail.createRoute(notificationId))
                     },
+                    onOpenSettings = {
+                        navController.navigate(SaseDestination.Settings.route) {
+                            launchSingleTop = true
+                        }
+                    },
                 )
             }
-            composable(SaseDestination.NotificationDetail.routePattern) { backStackEntry ->
-                val notificationId = backStackEntry.arguments?.getString(
+            composable(SaseDestination.NotificationDetail.routePattern) { detailBackStackEntry ->
+                val notificationId = detailBackStackEntry.arguments?.getString(
                     SaseDestination.NotificationDetail.argumentName,
                 ).orEmpty()
-                NotificationDetailScreen(notificationId = notificationId)
+                NotificationDetailScreen(
+                    notificationId = notificationId,
+                    repository = notifications,
+                    onBack = { navController.popBackStack() },
+                )
             }
             composable(SaseDestination.Settings.route) {
                 SettingsScreen(controller = controller)
@@ -130,5 +167,3 @@ sealed interface SaseDestination {
         fun createRoute(notificationId: String): String = "notification/$notificationId"
     }
 }
-import org.sase.mobile.data.session.AndroidSessionRepositoryFactory
-import org.sase.mobile.data.session.SessionController
