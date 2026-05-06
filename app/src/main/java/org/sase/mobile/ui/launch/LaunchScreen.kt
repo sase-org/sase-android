@@ -1,6 +1,9 @@
 package org.sase.mobile.ui.launch
 
+import android.net.Uri
 import java.util.UUID
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -30,6 +33,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontFamily
@@ -43,6 +47,7 @@ import org.sase.mobile.data.agents.AgentFailureKind
 import org.sase.mobile.data.agents.AgentFailure
 import org.sase.mobile.data.agents.AgentsState
 import org.sase.mobile.data.api.GatewayApiError
+import org.sase.mobile.data.api.dto.MobileAgentImageLaunchRequestWire
 import org.sase.mobile.data.api.dto.MobileAgentLaunchResultWire
 import org.sase.mobile.data.api.dto.MobileAgentLaunchSlotResultWire
 import org.sase.mobile.data.api.dto.MobileAgentLaunchSlotStatusWire
@@ -61,6 +66,9 @@ import org.sase.mobile.ui.theme.SaseMobileTheme
 fun LaunchScreen(
     state: AgentsState,
     onLaunch: suspend (MobileAgentTextLaunchRequestWire) -> AgentActionState,
+    onLaunchImage: suspend (MobileAgentImageLaunchRequestWire) -> AgentActionState = {
+        AgentActionState.Failed("Image launch is unavailable")
+    },
     onOpenAgents: () -> Unit,
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
@@ -69,9 +77,15 @@ fun LaunchScreen(
     prefillPrompt: String? = null,
     onPrefillConsumed: () -> Unit = {},
     initialHelperState: LaunchHelperState? = null,
+    initialImageAttachment: SelectedImageAttachment? = null,
+    imageAttachmentReader: ImageAttachmentReader? = null,
     requestIdFactory: () -> String = { "android-${UUID.randomUUID()}" },
 ) {
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val resolvedImageReader = imageAttachmentReader ?: remember(context) {
+        AndroidImageAttachmentReader(context.applicationContext)
+    }
     var prompt by rememberSaveable(stateSaver = TextFieldValue.Saver) {
         mutableStateOf(TextFieldValue(""))
     }
@@ -84,6 +98,43 @@ fun LaunchScreen(
     var requestId by rememberSaveable { mutableStateOf(requestIdFactory()) }
     var helperState by remember(initialHelperState) {
         mutableStateOf(initialHelperState ?: LaunchHelperState())
+    }
+    var selectedImage by remember(initialImageAttachment) {
+        mutableStateOf(initialImageAttachment)
+    }
+    var imageError by rememberSaveable { mutableStateOf<String?>(null) }
+    var pendingCameraUri by rememberSaveable { mutableStateOf<String?>(null) }
+
+    fun attachImage(uri: Uri, source: ImageAttachmentSource) {
+        scope.launch {
+            imageError = null
+            when (val result = resolvedImageReader.describe(uri)) {
+                is ImageAttachmentLoadResult.Success -> {
+                    selectedImage = SelectedImageAttachment(uri, result.metadata, source)
+                }
+
+                is ImageAttachmentLoadResult.Failure -> {
+                    imageError = result.error.userMessage()
+                }
+            }
+        }
+    }
+
+    val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) {
+            imageError = "No image selected."
+        } else {
+            attachImage(uri, ImageAttachmentSource.Gallery)
+        }
+    }
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        val uri = pendingCameraUri?.let(Uri::parse)
+        if (success && uri != null) {
+            attachImage(uri, ImageAttachmentSource.Camera)
+        } else {
+            imageError = "Camera capture was cancelled or permission was denied."
+        }
+        pendingCameraUri = null
     }
 
     suspend fun refreshHelpers() {
@@ -153,6 +204,67 @@ fun LaunchScreen(
             onRegenerateRequestId = { requestId = requestIdFactory() },
         )
 
+        ImageAttachPanel(
+            selectedImage = selectedImage,
+            imageError = imageError,
+            launchEnabled = prompt.text.isNotBlank() &&
+                selectedImage != null &&
+                state.action !is AgentActionState.Running,
+            onPickImage = {
+                galleryLauncher.launch(arrayOf("image/*"))
+            },
+            onCaptureImage = {
+                val uri = resolvedImageReader.createCameraCaptureUri()
+                if (uri == null) {
+                    imageError = "Camera capture is unavailable."
+                } else {
+                    pendingCameraUri = uri.toString()
+                    cameraLauncher.launch(uri)
+                }
+            },
+            onClearImage = {
+                selectedImage = null
+                imageError = null
+            },
+            onLaunchImage = {
+                val image = selectedImage
+                if (image == null) {
+                    imageError = "Attach an image before launching."
+                } else {
+                    scope.launch {
+                        imageError = null
+                        when (val payloadResult = resolvedImageReader.encodedPayload(image.uri, image.metadata)) {
+                            is ImageAttachmentPayloadResult.Success -> {
+                                val payload = payloadResult.payload
+                                val request = MobileAgentImageLaunchRequestWire(
+                                    prompt = prompt.text,
+                                    requestId = requestId.cleanLaunchField(),
+                                    originalFilename = payload.metadata.displayName,
+                                    contentType = payload.metadata.contentType,
+                                    byteLength = payload.metadata.byteLength ?: 0,
+                                    base64Image = payload.base64Image,
+                                    displayName = displayName.cleanLaunchField(),
+                                    name = name.cleanLaunchField(),
+                                    provider = provider.cleanLaunchField(),
+                                    runtime = runtime.cleanLaunchField(),
+                                    model = model.cleanLaunchField(),
+                                    project = project.cleanLaunchField(),
+                                )
+                                val result = onLaunchImage(request)
+                                if (result is AgentActionState.Succeeded) {
+                                    requestId = requestIdFactory()
+                                }
+                            }
+
+                            is ImageAttachmentPayloadResult.Failure -> {
+                                imageError = payloadResult.error.userMessage()
+                            }
+                        }
+                    }
+                }
+            },
+        )
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -206,6 +318,72 @@ fun LaunchScreen(
             results = state.recentLaunchResults,
             onOpenAgents = onOpenAgents,
         )
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ImageAttachPanel(
+    selectedImage: SelectedImageAttachment?,
+    imageError: String?,
+    launchEnabled: Boolean,
+    onPickImage: () -> Unit,
+    onCaptureImage: () -> Unit,
+    onClearImage: () -> Unit,
+    onLaunchImage: () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(text = "Image", style = MaterialTheme.typography.titleSmall)
+        selectedImage?.let { image ->
+            Text(
+                text = listOfNotNull(
+                    image.metadata.displayName,
+                    image.metadata.contentType,
+                    image.metadata.byteLength?.let { "${it} bytes" },
+                    image.source.label,
+                ).joinToString(" - "),
+                modifier = Modifier.testTag("launch_image_summary"),
+            )
+        }
+        imageError?.let {
+            Text(
+                text = it,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.testTag("launch_image_error"),
+            )
+        }
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            OutlinedButton(
+                onClick = onPickImage,
+                modifier = Modifier.testTag("launch_pick_image"),
+            ) {
+                Text("Gallery")
+            }
+            OutlinedButton(
+                onClick = onCaptureImage,
+                modifier = Modifier.testTag("launch_capture_image"),
+            ) {
+                Text("Camera")
+            }
+            OutlinedButton(
+                onClick = onClearImage,
+                enabled = selectedImage != null,
+                modifier = Modifier.testTag("launch_clear_image"),
+            ) {
+                Text("Clear")
+            }
+            Button(
+                onClick = onLaunchImage,
+                enabled = launchEnabled,
+                modifier = Modifier.testTag("launch_image_submit"),
+            ) {
+                Text("Launch image")
+            }
+        }
     }
 }
 
@@ -510,6 +688,22 @@ private fun GatewayApiError.userMessage(): String {
         is GatewayApiError.Transport -> "Gateway unavailable: ${kind.name}"
     }
 }
+
+private fun ImageAttachmentError.userMessage(): String {
+    return when (this) {
+        ImageAttachmentError.PermissionDenied -> "Image permission was denied."
+        ImageAttachmentError.MissingContent -> "Selected image is no longer available."
+        ImageAttachmentError.UnsupportedType -> "Use a PNG, JPEG, WEBP, or GIF image."
+        ImageAttachmentError.Oversize -> "Image is larger than the 10 MB mobile upload limit."
+        ImageAttachmentError.ReadFailed -> "Could not read the selected image."
+    }
+}
+
+private val ImageAttachmentSource.label: String
+    get() = when (this) {
+        ImageAttachmentSource.Camera -> "camera"
+        ImageAttachmentSource.Gallery -> "gallery"
+    }
 
 private val MobileAgentLaunchSlotStatusWire.label: String
     get() = when (this) {

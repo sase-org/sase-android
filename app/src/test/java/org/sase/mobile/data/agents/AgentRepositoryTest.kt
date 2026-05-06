@@ -13,6 +13,7 @@ import org.sase.mobile.data.api.GatewaySseClient
 import org.sase.mobile.data.api.dto.AgentsChangedEventPayloadWire
 import org.sase.mobile.data.api.dto.ApiErrorCodeWire
 import org.sase.mobile.data.api.dto.ApiErrorWire
+import org.sase.mobile.data.api.dto.MobileAgentImageLaunchRequestWire
 import org.sase.mobile.data.api.dto.MobileAgentTextLaunchRequestWire
 import org.sase.mobile.data.api.readResource
 import org.sase.mobile.data.session.InMemoryHostSessionStorage
@@ -89,6 +90,42 @@ class AgentRepositoryTest {
             assertThat(launchBody).contains("\"prompt\":\"#gh:mobile\\n%runtime codex\\nKeep 100%")
             assertThat(launchBody).contains("\"device_id\":\"dev_pixel\"")
             assertThat(launchBody).contains("\"request_id\":\"launch-android-1\"")
+            assertThat(gateway.takeRequest().path).isEqualTo("/api/v1/agents?include_recent=true")
+            assertThat(gateway.takeRequest().path).isEqualTo("/api/v1/agents/resume-options")
+        }
+    }
+
+    @Test
+    fun launchImageAgentUploadsMetadataBytesAndStoresRecentResult() = runTest {
+        FakeGateway().use { gateway ->
+            gateway.installEpicSixHarness()
+            val repository = repository(gateway.baseUrl)
+
+            val result = repository.launchImageAgent(
+                MobileAgentImageLaunchRequestWire(
+                    prompt = "Review screenshot",
+                    requestId = "image-android-1",
+                    originalFilename = "screen.png",
+                    contentType = "image/png",
+                    byteLength = 8,
+                    base64Image = "cGl4ZWxzIQ==",
+                    project = "sase",
+                ),
+            )
+
+            assertThat(result).isEqualTo(AgentActionState.Succeeded("Launched: mobile-image-agent"))
+            assertThat(repository.state.value.recentLaunchResults).hasSize(1)
+            assertThat(repository.state.value.recentLaunchResults.single().primary?.name)
+                .isEqualTo("mobile-image-agent")
+
+            val launchRequest = gateway.takeRequest()
+            val launchBody = launchRequest.body.readUtf8()
+            assertThat(launchRequest.path).isEqualTo("/api/v1/agents/launch-image")
+            assertThat(launchBody).contains("\"original_filename\":\"screen.png\"")
+            assertThat(launchBody).contains("\"content_type\":\"image/png\"")
+            assertThat(launchBody).contains("\"byte_length\":8")
+            assertThat(launchBody).contains("\"base64_image\":\"cGl4ZWxzIQ==\"")
+            assertThat(launchBody).contains("\"device_id\":\"dev_pixel\"")
             assertThat(gateway.takeRequest().path).isEqualTo("/api/v1/agents?include_recent=true")
             assertThat(gateway.takeRequest().path).isEqualTo("/api/v1/agents/resume-options")
         }

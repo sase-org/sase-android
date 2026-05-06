@@ -17,6 +17,7 @@ import org.sase.mobile.data.api.dto.ApiErrorCodeWire
 import org.sase.mobile.data.api.dto.AgentsChangedEventPayloadWire
 import org.sase.mobile.data.api.dto.EventPayloadTypeWire
 import org.sase.mobile.data.api.dto.EventRecordWire
+import org.sase.mobile.data.api.dto.MobileAgentImageLaunchRequestWire
 import org.sase.mobile.data.api.dto.MobileAgentKillRequestWire
 import org.sase.mobile.data.api.dto.MobileAgentLaunchResultWire
 import org.sase.mobile.data.api.dto.MobileAgentLaunchSlotStatusWire
@@ -137,6 +138,24 @@ class AgentRepository(
         val cleanRequest = request.copy(deviceId = session.deviceId)
         mutableState.value = mutableState.value.copy(action = AgentActionState.Running("Launching agent"))
         return when (val result = client(session).launchAgent(cleanRequest)) {
+            is GatewayApiResult.Success -> {
+                val launch = result.value
+                mutableState.value = mutableState.value.copy(
+                    recentLaunchResults = listOf(launch) + mutableState.value.recentLaunchResults.take(4),
+                )
+                refresh(AgentsRefreshReason.ActionCompleted)
+                publishAction(AgentActionState.Succeeded(launch.summaryMessage()))
+            }
+
+            is GatewayApiResult.Failure -> publishAction(handleActionFailure(session, result.error))
+        }
+    }
+
+    suspend fun launchImageAgent(request: MobileAgentImageLaunchRequestWire): AgentActionState {
+        val session = sessionStorage.read() ?: return publishAction(AgentActionState.Failed("Not paired"))
+        val cleanRequest = request.copy(deviceId = session.deviceId)
+        mutableState.value = mutableState.value.copy(action = AgentActionState.Running("Uploading image"))
+        return when (val result = client(session).launchImageAgent(cleanRequest)) {
             is GatewayApiResult.Success -> {
                 val launch = result.value
                 mutableState.value = mutableState.value.copy(

@@ -227,6 +227,7 @@ fun SaseMobileApp(
                 LaunchScreen(
                     state = agentsState,
                     onLaunch = { request -> agents.launchAgent(request) },
+                    onLaunchImage = { request -> agents.launchImageAgent(request) },
                     helperRepository = helpers,
                     helperEventVersion = helperEventVersion,
                     prefillPrompt = launchPrefillPrompt,
