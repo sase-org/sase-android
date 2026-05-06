@@ -6,8 +6,9 @@ import java.time.ZoneOffset
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
 import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
 import org.junit.Test
@@ -80,7 +81,7 @@ class NotificationRepositoryTest {
             )
 
             repository.start()
-            advanceUntilIdle()
+            waitUntilConnection(repository) { it == NotificationConnectionState.LoggedOut }
 
             assertThat(repository.connection.value).isEqualTo(NotificationConnectionState.LoggedOut)
             assertThat(gateway.requestCount).isEqualTo(0)
@@ -90,7 +91,7 @@ class NotificationRepositoryTest {
 
             val refreshRequest = gateway.takeRequest()
             val sseRequest = gateway.takeRequest()
-            advanceUntilIdle()
+            waitUntilInbox(repository) { it.cards.size == 7 }
 
             assertThat(refreshRequest.path).isEqualTo("/api/v1/notifications?include_dismissed=true")
             assertThat(sseRequest.path).isEqualTo("/api/v1/events")
@@ -227,6 +228,28 @@ class NotificationRepositoryTest {
             onHelpersChanged = onHelpersChanged,
             scope = CoroutineScope(SupervisorJob()),
         )
+    }
+
+    private suspend fun waitUntilConnection(
+        repository: NotificationRepository,
+        predicate: (NotificationConnectionState) -> Boolean,
+    ) {
+        withTimeout(5_000) {
+            while (!predicate(repository.connection.value)) {
+                delay(10)
+            }
+        }
+    }
+
+    private suspend fun waitUntilInbox(
+        repository: NotificationRepository,
+        predicate: (NotificationInboxState) -> Boolean,
+    ) {
+        withTimeout(5_000) {
+            while (!predicate(repository.inbox.value)) {
+                delay(10)
+            }
+        }
     }
 
     private fun pairedSession(baseUrl: HttpUrl): PairedHostSession {

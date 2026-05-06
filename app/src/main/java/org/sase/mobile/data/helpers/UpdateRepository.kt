@@ -56,7 +56,13 @@ class UpdateRepository(
             error = null,
         )
         if (job?.status?.isTerminal() == false) {
-            startPolling(job.jobId)
+            val shouldContinue = refreshJob(job.jobId)
+            val refreshedJob = mutableState.value.job
+            if (shouldContinue && refreshedJob?.status?.isTerminal() == false) {
+                startPolling(job.jobId)
+            } else {
+                mutableState.value = mutableState.value.copy(status = UpdateStatus.Idle)
+            }
         }
     }
 

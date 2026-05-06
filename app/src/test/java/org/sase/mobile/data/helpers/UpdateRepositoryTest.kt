@@ -1,9 +1,11 @@
 package org.sase.mobile.data.helpers
 
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
 import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
 import org.junit.Test
@@ -29,6 +31,7 @@ class UpdateRepositoryTest {
 
             repository.startUpdateAndPoll()
             advanceUntilIdle()
+            waitUntilState(repository) { it.job?.status == MobileUpdateJobStatusWire.Succeeded }
 
             val startRequest = gateway.takeRequest()
             val statusRequest = gateway.takeRequest()
@@ -102,7 +105,7 @@ class UpdateRepositoryTest {
             val repository = repository(gateway.baseUrl)
 
             repository.startUpdateAndPoll()
-            advanceUntilIdle()
+            waitUntilState(repository) { it.error == UpdateError.AlreadyRunning }
 
             assertThat(repository.state.value.error).isEqualTo(UpdateError.AlreadyRunning)
             assertThat(repository.state.value.status).isEqualTo(UpdateStatus.Idle)
@@ -120,6 +123,17 @@ class UpdateRepositoryTest {
         advanceUntilIdle()
 
         assertThat(repository.state.value.error).isEqualTo(UpdateError.NotPaired)
+    }
+
+    private suspend fun waitUntilState(
+        repository: UpdateRepository,
+        predicate: (UpdateUiState) -> Boolean,
+    ) {
+        withTimeout(5_000) {
+            while (!predicate(repository.state.value)) {
+                delay(10)
+            }
+        }
     }
 
     private fun TestScope.repository(
