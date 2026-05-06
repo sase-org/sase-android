@@ -11,8 +11,11 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.vectorResource
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -27,7 +30,15 @@ import org.sase.mobile.ui.settings.SettingsScreen
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SaseMobileApp(modifier: Modifier = Modifier) {
+fun SaseMobileApp(
+    modifier: Modifier = Modifier,
+    sessionController: SessionController? = null,
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val controller = sessionController ?: remember(context.applicationContext, scope) {
+        AndroidSessionRepositoryFactory.create(context.applicationContext, scope)
+    }
     val navController = rememberNavController()
     val destinations = listOf(SaseDestination.Inbox, SaseDestination.Settings)
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -89,7 +100,7 @@ fun SaseMobileApp(modifier: Modifier = Modifier) {
                 NotificationDetailScreen(notificationId = notificationId)
             }
             composable(SaseDestination.Settings.route) {
-                SettingsScreen()
+                SettingsScreen(controller = controller)
             }
         }
     }
@@ -119,3 +130,5 @@ sealed interface SaseDestination {
         fun createRoute(notificationId: String): String = "notification/$notificationId"
     }
 }
+import org.sase.mobile.data.session.AndroidSessionRepositoryFactory
+import org.sase.mobile.data.session.SessionController

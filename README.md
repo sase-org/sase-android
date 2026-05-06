@@ -13,10 +13,37 @@ embed SASE core logic on the phone.
   coroutines, OkHttp, DataStore, lint, and test dependencies
 - Baseline unit tests plus a Compose instrumentation smoke test
 - CI gate for unit tests, lint, and debug APK assembly
+- Keystore-backed bearer-token storage, persisted paired-host metadata, manual
+  pairing, QR payload parsing/scanning, and settings host management
 
 Later MVP phases will add checked gateway contract fixtures, typed API DTOs,
-pairing/session storage, SSE reconnect behavior, local notification cache, and
-real inbox/detail/settings data flows.
+SSE reconnect behavior, local notification cache, and real inbox/detail data
+flows.
+
+## Pairing QR Payload
+
+The settings screen accepts the same pairing payload from camera scans or a
+pasted payload field. Payloads are data only; the app rejects arbitrary command,
+path, query, and fragment fields.
+
+JSON form:
+
+```json
+{
+  "schema_version": 1,
+  "type": "sase_mobile_pair",
+  "base_url": "http://127.0.0.1:7629",
+  "pairing_id": "pair_abc123",
+  "code": "123456",
+  "host_label": "workstation"
+}
+```
+
+URI form:
+
+```text
+sase://pair?base_url=http%3A%2F%2F127.0.0.1%3A7629&pairing_id=pair_abc123&code=123456&host_label=workstation
+```
 
 ## Local Setup
 
