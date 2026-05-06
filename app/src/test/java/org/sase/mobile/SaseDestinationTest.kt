@@ -1,0 +1,20 @@
+package org.sase.mobile
+
+import com.google.common.truth.Truth.assertThat
+import org.junit.Test
+import org.sase.mobile.ui.SaseDestination
+
+class SaseDestinationTest {
+    @Test
+    fun notificationDetailRouteUsesSuppliedId() {
+        assertThat(SaseDestination.NotificationDetail.createRoute("plan-123"))
+            .isEqualTo("notification/plan-123")
+    }
+
+    @Test
+    fun bottomNavigationStartsWithInboxAndSettings() {
+        val routes = listOf(SaseDestination.Inbox.route, SaseDestination.Settings.route)
+
+        assertThat(routes).containsExactly("inbox", "settings").inOrder()
+    }
+}
