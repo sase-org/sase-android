@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "code": "bridge_unavailable",
+  "message": "host bridge is unavailable",
+  "target": "notifications",
+  "details": null
+}

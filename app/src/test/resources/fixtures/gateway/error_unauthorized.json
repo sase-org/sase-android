@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "code": "unauthorized",
+  "message": "missing or invalid bearer token",
+  "target": "Authorization",
+  "details": null
+}

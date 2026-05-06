@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "id": "0000000000000002",
+  "created_at": "2026-05-06T15:10:01Z",
+  "payload": {
+    "type": "notifications_changed",
+    "data": {
+      "reason": "mark_read",
+      "notification_id": "plan0001-review"
+    }
+  }
+}

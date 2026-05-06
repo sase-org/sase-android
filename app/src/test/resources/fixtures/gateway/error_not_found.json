@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "code": "not_found",
+  "message": "notification not found",
+  "target": "notification_id",
+  "details": {
+    "notification_id": "missing-row"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "pairing_id": "pair_abc123",
+  "code": "123456",
+  "expires_at": "2026-05-06T15:05:00Z",
+  "host_label": "workstation",
+  "host_fingerprint": "sha256:host"
+}

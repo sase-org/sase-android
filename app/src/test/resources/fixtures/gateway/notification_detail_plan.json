@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "notification": {
+    "id": "plan0001-review",
+    "timestamp": "2026-05-06T15:10:00Z",
+    "sender": "planner",
+    "priority": true,
+    "actionable": true,
+    "read": false,
+    "dismissed": false,
+    "silent": false,
+    "muted": false,
+    "notes_summary": "Plan review waiting",
+    "file_count": 2,
+    "action_summary": {
+      "kind": "plan_approval",
+      "state": "available",
+      "label": "Plan approval"
+    }
+  },
+  "notes": [
+    "Review the plan before running the coder.",
+    "Focus on tests and Android client boundaries."
+  ],
+  "attachments": [
+    {
+      "id": "att_000",
+      "token": "att_plan_md",
+      "display_name": "~/plans/plan.md",
+      "kind": "markdown",
+      "content_type": "text/markdown",
+      "byte_size": 1280,
+      "source_notification_id": "plan0001-review",
+      "downloadable": true,
+      "download_requires_auth": true,
+      "can_inline": true,
+      "path_available": true
+    },
+    {
+      "id": "att_001",
+      "token": null,
+      "display_name": "~/plans/report.pdf",
+      "kind": "pdf",
+      "content_type": "application/pdf",
+      "byte_size": 262144,
+      "source_notification_id": "plan0001-review",
+      "downloadable": false,
+      "download_requires_auth": true,
+      "can_inline": false,
+      "path_available": false
+    }
+  ],
+  "action": {
+    "kind": "plan_approval",
+    "identity": {
+      "notification_id": "plan0001-review",
+      "prefix": "plan0001",
+      "prefix_len": 8,
+      "resolution": "unique_prefix"
+    },
+    "state": "available",
+    "response_dir": "~/.sase/responses/plan0001",
+    "plan_file": "~/plans/plan.md",
+    "choices": [
+      "approve",
+      "run",
+      "reject",
+      "epic",
+      "legend",
+      "feedback"
+    ]
+  }
+}

@@ -1,0 +1,121 @@
+{
+  "schema_version": 1,
+  "notifications": [
+    {
+      "id": "plan0001-review",
+      "timestamp": "2026-05-06T15:10:00Z",
+      "sender": "planner",
+      "priority": true,
+      "actionable": true,
+      "read": false,
+      "dismissed": false,
+      "silent": false,
+      "muted": false,
+      "notes_summary": "Plan review waiting",
+      "file_count": 1,
+      "action_summary": {
+        "kind": "plan_approval",
+        "state": "available",
+        "label": "Plan approval"
+      }
+    },
+    {
+      "id": "hitl0001-choice",
+      "timestamp": "2026-05-06T15:09:00Z",
+      "sender": "workflow",
+      "priority": false,
+      "actionable": true,
+      "read": false,
+      "dismissed": false,
+      "silent": false,
+      "muted": false,
+      "notes_summary": "HITL prompt needs input",
+      "file_count": 0,
+      "action_summary": {
+        "kind": "hitl",
+        "state": "available",
+        "label": "HITL"
+      }
+    },
+    {
+      "id": "quest001-answer",
+      "timestamp": "2026-05-06T15:08:00Z",
+      "sender": "user-agent",
+      "priority": true,
+      "actionable": true,
+      "read": false,
+      "dismissed": false,
+      "silent": false,
+      "muted": false,
+      "notes_summary": "Question waiting",
+      "file_count": 0,
+      "action_summary": {
+        "kind": "user_question",
+        "state": "available",
+        "label": "Question"
+      }
+    },
+    {
+      "id": "workflow001-status",
+      "timestamp": "2026-05-06T15:07:00Z",
+      "sender": "workflow",
+      "priority": false,
+      "actionable": false,
+      "read": true,
+      "dismissed": false,
+      "silent": false,
+      "muted": false,
+      "notes_summary": "Workflow finished",
+      "file_count": 0,
+      "action_summary": null
+    },
+    {
+      "id": "error001-digest",
+      "timestamp": "2026-05-06T15:06:00Z",
+      "sender": "axe",
+      "priority": true,
+      "actionable": false,
+      "read": false,
+      "dismissed": false,
+      "silent": false,
+      "muted": false,
+      "notes_summary": "Error digest available",
+      "file_count": 1,
+      "action_summary": {
+        "kind": "unsupported",
+        "state": "unsupported",
+        "label": "Unsupported"
+      }
+    },
+    {
+      "id": "image001-ready",
+      "timestamp": "2026-05-06T15:05:00Z",
+      "sender": "image",
+      "priority": false,
+      "actionable": false,
+      "read": false,
+      "dismissed": false,
+      "silent": false,
+      "muted": false,
+      "notes_summary": "Generated image ready",
+      "file_count": 1,
+      "action_summary": null
+    },
+    {
+      "id": "generic001",
+      "timestamp": "2026-05-06T15:04:00Z",
+      "sender": "system",
+      "priority": false,
+      "actionable": false,
+      "read": false,
+      "dismissed": false,
+      "silent": false,
+      "muted": false,
+      "notes_summary": "Generic notification",
+      "file_count": 0,
+      "action_summary": null
+    }
+  ],
+  "total_count": 7,
+  "next_high_water": "2026-05-06T15:10:00Z"
+}
