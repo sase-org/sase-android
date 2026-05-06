@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "result": {
+    "status": "partial_success",
+    "message": "loaded xprompts",
+    "warnings": ["pdf catalog unavailable"],
+    "skipped": [],
+    "partial_failure_count": 1
+  },
+  "context": {
+    "project": "sase",
+    "scope": "explicit"
+  },
+  "entries": [
+    {
+      "name": "bd/work_phase_bead",
+      "display_label": "bd/work_phase_bead",
+      "description": "Work a claimed phase bead",
+      "source_bucket": "project",
+      "project": "sase",
+      "tags": ["bead", "mobile"],
+      "input_signature": "bead_id",
+      "is_skill": false,
+      "content_preview": "Read the bead and complete the phase.",
+      "source_path_display": "xprompts/bd/work_phase_bead.md"
+    }
+  ],
+  "stats": {
+    "total_count": 1,
+    "project_count": 1,
+    "skill_count": 0,
+    "pdf_requested": true
+  },
+  "catalog_attachment": {
+    "display_name": "xprompt-catalog.pdf",
+    "content_type": "application/pdf",
+    "byte_size": 4096,
+    "path_display": "artifacts/xprompt-catalog.pdf",
+    "generated": false
+  }
+}

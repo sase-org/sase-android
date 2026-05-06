@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "result": {
+    "status": "success",
+    "message": "loaded beads",
+    "warnings": [],
+    "skipped": [],
+    "partial_failure_count": null
+  },
+  "context": {
+    "project": "sase",
+    "scope": "explicit"
+  },
+  "beads": [
+    {
+      "id": "sase-26.6.1",
+      "title": "Phase 1",
+      "status": "in_progress",
+      "bead_type": "phase",
+      "tier": null,
+      "project": "sase",
+      "parent_id": "sase-26.6",
+      "assignee": "sase-26.6.1",
+      "updated_at": "2026-05-06T22:06:04Z",
+      "dependency_count": 0,
+      "block_count": 8,
+      "child_count": 0,
+      "plan_path_display": null,
+      "changespec_name": null,
+      "changespec_status": null
+    }
+  ],
+  "total_count": 1
+}

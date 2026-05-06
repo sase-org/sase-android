@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "source_agent": "mobile-failed",
+  "launch": {
+    "schema_version": 1,
+    "primary": {
+      "slot_id": "retry-slot",
+      "name": "mobile-failed-retry",
+      "status": "launched",
+      "artifact_dir": "/tmp/sase/artifacts/mobile-failed-retry",
+      "message": "retry launched"
+    },
+    "slots": [
+      {
+        "slot_id": "retry-slot",
+        "name": "mobile-failed-retry",
+        "status": "launched",
+        "artifact_dir": "/tmp/sase/artifacts/mobile-failed-retry",
+        "message": "retry launched"
+      }
+    ]
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "result": {
+    "status": "success",
+    "message": "loaded bead",
+    "warnings": [],
+    "skipped": [],
+    "partial_failure_count": null
+  },
+  "context": {
+    "project": "sase",
+    "scope": "explicit"
+  },
+  "bead": {
+    "summary": {
+      "id": "sase-26.6.1",
+      "title": "Phase 1",
+      "status": "in_progress",
+      "bead_type": "phase",
+      "tier": null,
+      "project": "sase",
+      "parent_id": "sase-26.6",
+      "assignee": "sase-26.6.1",
+      "updated_at": "2026-05-06T22:06:04Z",
+      "dependency_count": 0,
+      "block_count": 8,
+      "child_count": 0,
+      "plan_path_display": null,
+      "changespec_name": null,
+      "changespec_status": null
+    },
+    "description": "Make the Android data/API layer understand the full Epic 6 contract before UI phases depend on it.",
+    "notes": null,
+    "design_path_display": "sdd/epics/202605/mobile_gateway_epic_6.md",
+    "dependencies": [],
+    "blocks": ["sase-26.6.2"],
+    "children": [],
+    "workspace_display": "sase-android"
+  }
+}

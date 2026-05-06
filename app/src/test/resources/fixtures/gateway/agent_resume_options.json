@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "options": [
+    {
+      "id": "resume-mobile-demo",
+      "agent_name": "mobile-demo",
+      "kind": "resume",
+      "label": "Resume mobile-demo",
+      "prompt_text": "#resume:mobile-demo",
+      "direct_launch_supported": true
+    },
+    {
+      "id": "wait-mobile-demo",
+      "agent_name": "mobile-demo",
+      "kind": "wait",
+      "label": "Wait for mobile-demo",
+      "prompt_text": "#wait:mobile-demo",
+      "direct_launch_supported": true
+    }
+  ]
+}

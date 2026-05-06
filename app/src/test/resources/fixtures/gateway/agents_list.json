@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "agents": [
+    {
+      "name": "mobile-demo",
+      "project": "sase",
+      "status": "running",
+      "pid": 12345,
+      "model": "gpt-5.4",
+      "provider": "openai",
+      "workspace_number": 101,
+      "started_at": "2026-05-06T18:00:00Z",
+      "duration_seconds": 84,
+      "prompt_snippet": "Implement mobile launch",
+      "has_artifact_dir": true,
+      "retry_lineage": {
+        "retry_of_timestamp": null,
+        "retried_as_timestamp": null,
+        "retry_chain_root_timestamp": "20260506_180000",
+        "retry_attempt": 0,
+        "parent_agent_name": null
+      },
+      "actions": {
+        "can_resume": true,
+        "can_wait": true,
+        "can_kill": true,
+        "can_retry": false
+      },
+      "display": {
+        "title": "mobile-demo",
+        "subtitle": "sase · running",
+        "status_label": "RUNNING"
+      }
+    },
+    {
+      "name": "mobile-failed",
+      "project": "sase",
+      "status": "failed",
+      "pid": null,
+      "model": null,
+      "provider": null,
+      "workspace_number": 102,
+      "started_at": "2026-05-06T17:55:00Z",
+      "duration_seconds": 31,
+      "prompt_snippet": "Retry mobile action",
+      "has_artifact_dir": true,
+      "retry_lineage": {
+        "retry_of_timestamp": "20260506_175500",
+        "retried_as_timestamp": null,
+        "retry_chain_root_timestamp": "20260506_175500",
+        "retry_attempt": 1,
+        "parent_agent_name": "mobile-original"
+      },
+      "actions": {
+        "can_resume": true,
+        "can_wait": false,
+        "can_kill": false,
+        "can_retry": true
+      },
+      "display": {
+        "title": "mobile-failed",
+        "subtitle": "retry available",
+        "status_label": "FAILED"
+      }
+    }
+  ],
+  "total_count": 2
+}

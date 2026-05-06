@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "result": {
+    "status": "partial_success",
+    "message": "loaded tags",
+    "warnings": ["one project was skipped"],
+    "skipped": [
+      {
+        "target": "sase/skipped",
+        "reason": "could not detect workflow type"
+      }
+    ],
+    "partial_failure_count": 1
+  },
+  "context": {
+    "project": "sase",
+    "scope": "explicit"
+  },
+  "tags": [
+    {
+      "tag": "#gh:mobile-action",
+      "project": "sase",
+      "changespec": "mobile-action",
+      "title": "Mobile action controls",
+      "status": "WIP",
+      "workflow": "gh",
+      "source_path_display": ".gp/sase.gp"
+    }
+  ],
+  "total_count": 1
+}

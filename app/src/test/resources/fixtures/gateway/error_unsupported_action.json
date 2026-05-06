@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "code": "unsupported_action",
+  "message": "notification action is not supported by mobile",
+  "target": "JumpToChangeSpec",
+  "details": null
+}

@@ -13,9 +13,25 @@ import okhttp3.OkHttpClient
 import org.junit.Test
 import org.sase.mobile.data.api.dto.ApiErrorCodeWire
 import org.sase.mobile.data.api.dto.GatewayWireSchemaVersion
+import org.sase.mobile.data.api.dto.HitlActionChoiceWire
+import org.sase.mobile.data.api.dto.HitlActionRequestWire
+import org.sase.mobile.data.api.dto.MobileAgentImageLaunchRequestWire
+import org.sase.mobile.data.api.dto.MobileAgentKillRequestWire
+import org.sase.mobile.data.api.dto.MobileAgentListRequestWire
+import org.sase.mobile.data.api.dto.MobileAgentRetryRequestWire
+import org.sase.mobile.data.api.dto.MobileAgentTextLaunchRequestWire
+import org.sase.mobile.data.api.dto.MobileBeadListRequestWire
+import org.sase.mobile.data.api.dto.MobileBeadShowRequestWire
+import org.sase.mobile.data.api.dto.MobileChangeSpecTagListRequestWire
+import org.sase.mobile.data.api.dto.MobileUpdateStartRequestWire
+import org.sase.mobile.data.api.dto.MobileXpromptCatalogRequestWire
 import org.sase.mobile.data.api.dto.PairFinishRequestWire
 import org.sase.mobile.data.api.dto.PairingDeviceMetadataWire
 import org.sase.mobile.data.api.dto.PairStartRequestWire
+import org.sase.mobile.data.api.dto.PlanActionChoiceWire
+import org.sase.mobile.data.api.dto.PlanActionRequestWire
+import org.sase.mobile.data.api.dto.QuestionActionChoiceWire
+import org.sase.mobile.data.api.dto.QuestionActionRequestWire
 import org.sase.mobile.testing.FakeGateway
 
 class GatewayApiClientTest {
@@ -141,6 +157,182 @@ class GatewayApiClientTest {
             assertThat(gateway.takeRequest().path).isEqualTo("/api/v1/notifications/plan0001-review")
             assertThat(gateway.takeRequest().path).isEqualTo("/api/v1/notifications/plan0001-review/mark-read")
             assertThat(gateway.takeRequest().path).isEqualTo("/api/v1/notifications/plan0001-review/dismiss")
+        }
+    }
+
+    @Test
+    fun executesEpicSixRoutesWithTypedRequestsAndResponses() = runTest {
+        FakeGateway().use { gateway ->
+            gateway.installEpicSixHarness()
+
+            val client = client(gateway.baseUrl) { FakeGateway.SmokeAuthToken }
+
+            assertThat(
+                client.submitPlanAction(
+                    PlanActionRequestWire(
+                        prefix = "plan0001",
+                        choice = PlanActionChoiceWire.Approve,
+                    ),
+                ).isSuccess(),
+            ).isTrue()
+            assertThat(
+                client.submitHitlAction(
+                    HitlActionRequestWire(
+                        prefix = "hitl0001",
+                        choice = HitlActionChoiceWire.Feedback,
+                        feedback = "Looks good",
+                    ),
+                ).isSuccess(),
+            ).isTrue()
+            assertThat(
+                client.submitQuestionAction(
+                    QuestionActionRequestWire(
+                        prefix = "question0001",
+                        choice = QuestionActionChoiceWire.Answer,
+                        selectedOptionId = "yes",
+                    ),
+                ).isSuccess(),
+            ).isTrue()
+            assertThat(
+                client.agents(
+                    MobileAgentListRequestWire(
+                        includeRecent = true,
+                        status = "running",
+                        project = "sase",
+                        limit = 10,
+                    ),
+                ).isSuccess(),
+            ).isTrue()
+            assertThat(client.agentResumeOptions().isSuccess()).isTrue()
+            assertThat(
+                client.launchAgent(
+                    MobileAgentTextLaunchRequestWire(
+                        prompt = "#gh:feature\nRun tests",
+                        requestId = "launch-1",
+                        model = "gpt-5.4",
+                        project = "sase",
+                    ),
+                ).isSuccess(),
+            ).isTrue()
+            assertThat(
+                client.launchImageAgent(
+                    MobileAgentImageLaunchRequestWire(
+                        prompt = "Inspect this image",
+                        requestId = "image-1",
+                        originalFilename = "screen.png",
+                        contentType = "image/png",
+                        byteLength = 11,
+                        base64Image = "aGVsbG8gd29ybGQ=",
+                    ),
+                ).isSuccess(),
+            ).isTrue()
+            assertThat(
+                client.killAgent(
+                    name = "mobile-demo",
+                    request = MobileAgentKillRequestWire(reason = "user requested"),
+                ).isSuccess(),
+            ).isTrue()
+            assertThat(
+                client.retryAgent(
+                    name = "mobile-failed",
+                    request = MobileAgentRetryRequestWire(requestId = "retry-1"),
+                ).isSuccess(),
+            ).isTrue()
+            assertThat(
+                client.changespecTags(
+                    MobileChangeSpecTagListRequestWire(project = "sase", limit = 5),
+                ).isSuccess(),
+            ).isTrue()
+            assertThat(
+                client.xpromptCatalog(
+                    MobileXpromptCatalogRequestWire(
+                        project = "sase",
+                        tag = "mobile",
+                        includePdf = true,
+                        limit = 20,
+                    ),
+                ).isSuccess(),
+            ).isTrue()
+            assertThat(
+                client.beads(
+                    MobileBeadListRequestWire(
+                        project = "sase",
+                        status = "in_progress",
+                        includeClosed = true,
+                    ),
+                ).isSuccess(),
+            ).isTrue()
+            assertThat(
+                client.beadDetail(
+                    MobileBeadShowRequestWire(
+                        beadId = "sase-26.6.1",
+                        project = "sase",
+                    ),
+                ).isSuccess(),
+            ).isTrue()
+            assertThat(
+                client.startUpdate(MobileUpdateStartRequestWire(requestId = "update-1")).isSuccess(),
+            ).isTrue()
+            assertThat(client.updateStatus("update-job-1").isSuccess()).isTrue()
+            val attachment = client.downloadAttachment("token_1")
+            assertThat(attachment.isSuccess()).isTrue()
+
+            val planRequest = gateway.takeRequest()
+            val hitlRequest = gateway.takeRequest()
+            val questionRequest = gateway.takeRequest()
+            val agentsRequest = gateway.takeRequest()
+            val planBody = planRequest.body.readUtf8()
+            assertThat(planRequest.path).isEqualTo("/api/v1/actions/plan/plan0001/approve")
+            assertThat(planBody).doesNotContain("\"prefix\"")
+            assertThat(planBody).doesNotContain("\"choice\"")
+            assertThat(hitlRequest.path).isEqualTo("/api/v1/actions/hitl/hitl0001/feedback")
+            assertThat(questionRequest.path).isEqualTo("/api/v1/actions/question/question0001/answer")
+            assertThat(agentsRequest.path).isEqualTo(
+                "/api/v1/agents?include_recent=true&status=running&project=sase&limit=10",
+            )
+
+            assertThat(gateway.takeRequest().path).isEqualTo("/api/v1/agents/resume-options")
+            assertThat(gateway.takeRequest().path).isEqualTo("/api/v1/agents/launch")
+            assertThat(gateway.takeRequest().path).isEqualTo("/api/v1/agents/launch-image")
+            assertThat(gateway.takeRequest().path).isEqualTo("/api/v1/agents/mobile-demo/kill")
+            assertThat(gateway.takeRequest().path).isEqualTo("/api/v1/agents/mobile-failed/retry")
+            assertThat(gateway.takeRequest().path).isEqualTo("/api/v1/changespec-tags?project=sase&limit=5")
+            assertThat(gateway.takeRequest().path)
+                .isEqualTo("/api/v1/xprompts/catalog?project=sase&tag=mobile&include_pdf=true&limit=20")
+            assertThat(gateway.takeRequest().path)
+                .isEqualTo("/api/v1/beads?project=sase&all_projects=false&status=in_progress&include_closed=true")
+            assertThat(gateway.takeRequest().path)
+                .isEqualTo("/api/v1/beads/sase-26.6.1?project=sase&all_projects=false")
+            assertThat(gateway.takeRequest().path).isEqualTo("/api/v1/update/start")
+            assertThat(gateway.takeRequest().path).isEqualTo("/api/v1/update/update-job-1")
+            assertThat(gateway.takeRequest().path).isEqualTo("/api/v1/attachments/token_1")
+        }
+    }
+
+    @Test
+    fun mapsEpicSixStructuredFailureCodes() = runTest {
+        FakeGateway().use { gateway ->
+            gateway.installEpicSixHarness()
+
+            val client = client(gateway.baseUrl) { FakeGateway.SmokeAuthToken }
+
+            val stale = client.submitPlanAction(
+                PlanActionRequestWire(prefix = "stale", choice = PlanActionChoiceWire.Approve),
+            ).failureError() as GatewayApiError.Http
+            val handled = client.submitPlanAction(
+                PlanActionRequestWire(prefix = "handled", choice = PlanActionChoiceWire.Approve),
+            ).failureError() as GatewayApiError.Http
+            val ambiguous = client.submitPlanAction(
+                PlanActionRequestWire(prefix = "ambiguous", choice = PlanActionChoiceWire.Approve),
+            ).failureError() as GatewayApiError.Http
+            val unsupported = client.submitPlanAction(
+                PlanActionRequestWire(prefix = "unsupported", choice = PlanActionChoiceWire.Approve),
+            ).failureError() as GatewayApiError.Http
+
+            assertThat(stale.apiError?.code).isEqualTo(ApiErrorCodeWire.GoneStale)
+            assertThat(handled.apiError?.code).isEqualTo(ApiErrorCodeWire.ConflictAlreadyHandled)
+            assertThat(ambiguous.apiError?.code).isEqualTo(ApiErrorCodeWire.AmbiguousPrefix)
+            assertThat(unsupported.apiError?.code).isEqualTo(ApiErrorCodeWire.UnsupportedAction)
         }
     }
 

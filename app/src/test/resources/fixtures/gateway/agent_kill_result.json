@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "name": "mobile-demo",
+  "status": "killed",
+  "pid": 12345,
+  "changed": true,
+  "message": "kill signal sent"
+}

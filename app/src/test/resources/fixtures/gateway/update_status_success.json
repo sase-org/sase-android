@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "result": {
+    "status": "success",
+    "message": "update succeeded",
+    "warnings": [],
+    "skipped": [],
+    "partial_failure_count": null
+  },
+  "job": {
+    "job_id": "update-job-1",
+    "status": "succeeded",
+    "started_at": "2026-05-06T18:05:00Z",
+    "finished_at": "2026-05-06T18:07:00Z",
+    "message": "update complete",
+    "log_path_display": "logs/update-job-1.log",
+    "completion_path_display": "logs/update-job-1.done"
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "primary": {
+    "slot_id": "slot-1",
+    "name": "mobile-launch-1",
+    "status": "launched",
+    "artifact_dir": "/tmp/sase/artifacts/mobile-launch-1",
+    "message": "launched"
+  },
+  "slots": [
+    {
+      "slot_id": "slot-1",
+      "name": "mobile-launch-1",
+      "status": "launched",
+      "artifact_dir": "/tmp/sase/artifacts/mobile-launch-1",
+      "message": "launched"
+    },
+    {
+      "slot_id": "slot-2",
+      "name": "mobile-launch-2",
+      "status": "dry_run",
+      "artifact_dir": null,
+      "message": "dry run"
+    }
+  ]
+}

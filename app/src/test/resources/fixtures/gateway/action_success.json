@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "prefix": "plan0001",
+  "notification_id": "plan0001-review",
+  "action_kind": "plan_approval",
+  "state": "available",
+  "response_file": "plan_response.json",
+  "response_json": {
+    "choice": "approve",
+    "response_dir": "/tmp/sase/responses/plan0001"
+  },
+  "message": "plan approved"
+}

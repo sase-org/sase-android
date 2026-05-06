@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "primary": {
+    "slot_id": "image-slot",
+    "name": "mobile-image-agent",
+    "status": "launched",
+    "artifact_dir": "/tmp/sase/artifacts/mobile-image-agent",
+    "message": "image launch queued"
+  },
+  "slots": [
+    {
+      "slot_id": "image-slot",
+      "name": "mobile-image-agent",
+      "status": "launched",
+      "artifact_dir": "/tmp/sase/artifacts/mobile-image-agent",
+      "message": "image launch queued"
+    }
+  ]
+}
