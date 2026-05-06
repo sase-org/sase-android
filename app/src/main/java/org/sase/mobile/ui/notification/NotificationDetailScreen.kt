@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ElevatedAssistChip
 import androidx.compose.material3.HorizontalDivider
@@ -21,6 +22,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -41,10 +44,14 @@ import org.sase.mobile.R
 import org.sase.mobile.data.actions.ActionFailure
 import org.sase.mobile.data.actions.ActionFailureKind
 import org.sase.mobile.data.actions.ActionSubmissionState
+import org.sase.mobile.data.actions.ActionTextEntry
 import org.sase.mobile.data.actions.NotificationActionControl
 import org.sase.mobile.data.actions.NotificationActionController
 import org.sase.mobile.data.actions.actionUnavailableFailure
 import org.sase.mobile.data.actions.deriveNotificationActionControls
+import org.sase.mobile.data.actions.draftKey
+import org.sase.mobile.data.actions.withDraftText
+import org.sase.mobile.data.actions.ActionDraftKey
 import org.sase.mobile.data.api.dto.MobileActionKindWire
 import org.sase.mobile.data.api.dto.MobileActionStateWire
 import org.sase.mobile.data.api.dto.MobileAttachmentKindWire
@@ -70,6 +77,7 @@ fun NotificationDetailScreen(
     var mutationMessage by remember(notificationId) { mutableStateOf<String?>(null) }
     var actionUiState by remember(notificationId) { mutableStateOf<ActionUiState?>(null) }
     var pendingConfirmation by remember(notificationId) { mutableStateOf<NotificationActionControl?>(null) }
+    var pendingTextAction by remember(notificationId) { mutableStateOf<PendingTextAction?>(null) }
     var lastAction by remember(notificationId) { mutableStateOf<NotificationActionControl?>(null) }
 
     fun refreshDetail() {
@@ -77,6 +85,75 @@ fun NotificationDetailScreen(
             if (repository != null) {
                 detailState = repository.refreshDetail(notificationId)
             }
+        }
+    }
+
+    fun openTextAction(detail: MobileNotificationDetailResponseWire, control: NotificationActionControl) {
+        val textEntry = control.textEntry ?: return
+        val draftKey = control.draftKey(notificationId, detail.action) ?: return
+        pendingConfirmation = null
+        pendingTextAction = PendingTextAction(
+            detail = detail,
+            control = control,
+            draftKey = draftKey,
+            entry = textEntry,
+            text = "",
+            loading = true,
+        )
+        scope.launch {
+            val draft = actionController?.readDraft(draftKey).orEmpty()
+            pendingTextAction = pendingTextAction?.takeIf { it.draftKey == draftKey }
+                ?.copy(text = draft, loading = false)
+        }
+    }
+
+    fun updateTextDraft(draft: PendingTextAction, text: String) {
+        pendingTextAction = draft.copy(text = text, loading = false)
+        scope.launch {
+            actionController?.saveDraft(draft.draftKey, text)
+        }
+    }
+
+    fun submitTextAction(draft: PendingTextAction) {
+        scope.launch {
+            val controller = actionController
+            if (controller == null) {
+                actionUiState = ActionUiState.Failure(
+                    ActionFailure(
+                        kind = ActionFailureKind.Disconnected,
+                        message = "Action controller is unavailable.",
+                        canRetry = true,
+                    ),
+                )
+                return@launch
+            }
+            controller.saveDraft(draft.draftKey, draft.text)
+            lastAction = draft.control.copy(choice = draft.control.choice.withDraftText(draft.text))
+            actionUiState = ActionUiState.Submitting(draft.control.label)
+            when (
+                val result = controller.submitAction(
+                    notificationId,
+                    draft.detail.action,
+                    draft.control.choice.withDraftText(draft.text),
+                )
+            ) {
+                is ActionSubmissionState.Success -> {
+                    result.refreshedDetail?.let { detailState = it }
+                    pendingTextAction = null
+                    actionUiState = ActionUiState.Success(result)
+                }
+                is ActionSubmissionState.Failure -> {
+                    result.refreshedDetail?.let { detailState = it }
+                    actionUiState = ActionUiState.Failure(result.failure)
+                }
+            }
+        }
+    }
+
+    fun discardTextAction(draft: PendingTextAction) {
+        scope.launch {
+            actionController?.discardDraft(draft.draftKey)
+            pendingTextAction = null
         }
     }
 
@@ -151,6 +228,7 @@ fun NotificationDetailScreen(
                     mutationMessage = mutationMessage,
                     actionUiState = actionUiState,
                     pendingConfirmation = pendingConfirmation,
+                    pendingTextAction = pendingTextAction,
                     onMarkRead = {
                         scope.launch {
                             val success = repository?.markRead(notificationId) ?: false
@@ -170,7 +248,9 @@ fun NotificationDetailScreen(
                         }
                     },
                     onAction = { detail, control ->
-                        if (control.requiresConfirmation) {
+                        if (control.textEntry != null) {
+                            openTextAction(detail, control)
+                        } else if (control.requiresConfirmation) {
                             pendingConfirmation = control
                         } else {
                             submitAction(detail, control)
@@ -178,6 +258,10 @@ fun NotificationDetailScreen(
                     },
                     onConfirmAction = { detail, control -> submitAction(detail, control) },
                     onCancelAction = { pendingConfirmation = null },
+                    onTextDraftChange = { draft, text -> updateTextDraft(draft, text) },
+                    onSubmitTextAction = { draft -> submitTextAction(draft) },
+                    onCloseTextAction = { pendingTextAction = null },
+                    onDiscardTextAction = { draft -> discardTextAction(draft) },
                     onRetryAction = {
                         val current = (detailState as? NotificationDetailState.Ready)?.detail
                         val retry = lastAction
@@ -224,11 +308,16 @@ private fun DetailContent(
     mutationMessage: String?,
     actionUiState: ActionUiState?,
     pendingConfirmation: NotificationActionControl?,
+    pendingTextAction: PendingTextAction?,
     onMarkRead: () -> Unit,
     onDismiss: () -> Unit,
     onAction: (MobileNotificationDetailResponseWire, NotificationActionControl) -> Unit,
     onConfirmAction: (MobileNotificationDetailResponseWire, NotificationActionControl) -> Unit,
     onCancelAction: () -> Unit,
+    onTextDraftChange: (PendingTextAction, String) -> Unit,
+    onSubmitTextAction: (PendingTextAction) -> Unit,
+    onCloseTextAction: () -> Unit,
+    onDiscardTextAction: (PendingTextAction) -> Unit,
     onRetryAction: () -> Unit,
     onRefresh: () -> Unit,
     onOpenSettings: () -> Unit,
@@ -273,6 +362,17 @@ private fun DetailContent(
             onRefresh = onRefresh,
             onOpenSettings = onOpenSettings,
         )
+
+        pendingTextAction?.let { draft ->
+            TextActionEditor(
+                draft = draft,
+                actionUiState = actionUiState,
+                onTextChange = { onTextDraftChange(draft, it) },
+                onSubmit = { onSubmitTextAction(draft) },
+                onClose = onCloseTextAction,
+                onDiscard = { onDiscardTextAction(draft) },
+            )
+        }
 
         HorizontalDivider()
 
@@ -349,6 +449,70 @@ private fun DetailContent(
 }
 
 @Composable
+private fun TextActionEditor(
+    draft: PendingTextAction,
+    actionUiState: ActionUiState?,
+    onTextChange: (String) -> Unit,
+    onSubmit: () -> Unit,
+    onClose: () -> Unit,
+    onDiscard: () -> Unit,
+) {
+    val submitting = actionUiState is ActionUiState.Submitting
+    AlertDialog(
+        onDismissRequest = onClose,
+        title = { Text(draft.entry.title) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextField(
+                    value = draft.text,
+                    onValueChange = onTextChange,
+                    enabled = !draft.loading && !submitting,
+                    label = { Text(draft.entry.fieldLabel) },
+                    placeholder = { Text(draft.entry.placeholder) },
+                    minLines = 5,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("action_text_draft"),
+                )
+                if (draft.loading) {
+                    Text("Loading saved draft.")
+                }
+                when (actionUiState) {
+                    is ActionUiState.Failure -> Text(
+                        text = actionUiState.failure.message,
+                        color = MaterialTheme.colorScheme.error,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    is ActionUiState.Success -> Text("Submitted action")
+                    is ActionUiState.Submitting -> Text("Submitting ${actionUiState.label.lowercase()}...")
+                    null -> Unit
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onSubmit,
+                enabled = !draft.loading && !submitting && draft.text.isNotBlank(),
+            ) {
+                Text(draft.entry.submitLabel)
+            }
+        },
+        dismissButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = onDiscard, enabled = !submitting) {
+                    Text("Discard")
+                }
+                OutlinedButton(onClick = onClose, enabled = !submitting) {
+                    Text("Close")
+                }
+            }
+        },
+    )
+}
+
+@Composable
+@OptIn(ExperimentalLayoutApi::class)
 private fun ActionState(
     detail: MobileNotificationDetailResponseWire,
     actionUiState: ActionUiState?,
@@ -503,6 +667,15 @@ private sealed interface ActionUiState {
     data class Success(val result: ActionSubmissionState.Success) : ActionUiState
     data class Failure(val failure: ActionFailure) : ActionUiState
 }
+
+private data class PendingTextAction(
+    val detail: MobileNotificationDetailResponseWire,
+    val control: NotificationActionControl,
+    val draftKey: ActionDraftKey,
+    val entry: ActionTextEntry,
+    val text: String,
+    val loading: Boolean,
+)
 
 private val MobileActionKindWire.label: String
     get() = when (this) {

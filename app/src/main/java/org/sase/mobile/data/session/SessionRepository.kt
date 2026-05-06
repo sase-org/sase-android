@@ -65,7 +65,7 @@ class SessionRepository(
                 appVersion = providerMetadata.appVersion,
             )
         }
-        val client = clientFactory(normalized, tokenProvider = { null })
+        val client = clientFactory(normalized) { null }
         return when (
             val result = client.finishPairing(
                 PairFinishRequestWire(
@@ -113,7 +113,7 @@ class SessionRepository(
         }
         mutableState.value = SessionUiState(SessionStatus.Checking, savedSession = saved)
         val token = runCatching { tokenVault.readToken() }.getOrNull()
-        val client = clientFactory(saved.baseUrl, tokenProvider = { token })
+        val client = clientFactory(saved.baseUrl) { token }
         when (val result = client.session()) {
             is GatewayApiResult.Success -> updateSessionFromGateway(saved, result.value)
             is GatewayApiResult.Failure -> handleSessionFailure(saved, result.error)

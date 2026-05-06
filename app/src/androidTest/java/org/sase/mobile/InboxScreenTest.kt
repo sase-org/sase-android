@@ -1,8 +1,9 @@
 package org.sase.mobile
 
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import org.junit.Assert.assertEquals
@@ -81,7 +82,7 @@ class InboxScreenTest {
 
         composeRule.onNodeWithText("Unread").performClick()
 
-        composeRule.onNodeWithText("Workflow finished").assertDoesNotExist()
+        composeRule.onAllNodesWithText("Workflow finished").assertCountEquals(0)
         composeRule.onNodeWithText("Plan review waiting").assertIsDisplayed()
     }
 }

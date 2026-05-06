@@ -29,7 +29,6 @@ import org.sase.mobile.data.api.dto.MobileAgentTextLaunchRequestWire
 import org.sase.mobile.data.session.HostSessionStorage
 import org.sase.mobile.data.session.PairedHostSession
 import org.sase.mobile.data.session.TokenVault
-import org.sase.mobile.data.session.toUserMessage
 
 class AgentRepository(
     private val sessionStorage: HostSessionStorage,
@@ -251,7 +250,7 @@ class AgentRepository(
         }
     }
 
-    private fun client(session: PairedHostSession): GatewayApiClient {
+    private suspend fun client(session: PairedHostSession): GatewayApiClient {
         val token = runCatching { tokenVault.readToken() }.getOrNull()
         return clientFactory(session.baseUrl) { token }
     }
@@ -267,7 +266,7 @@ class AgentRepository(
             connection = if (error.isUnauthorized()) {
                 AgentConnectionState.LoggedOut
             } else {
-                AgentConnectionState.Offline(error.toUserMessage())
+                AgentConnectionState.Offline(error.toAgentFailure().message)
             },
             hostLabel = session.hostLabel,
         )

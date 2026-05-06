@@ -39,12 +39,13 @@ internal object GatewayFixturePaths {
     const val ErrorAmbiguousPrefix = "fixtures/gateway/error_ambiguous_prefix.json"
     const val ErrorUnsupportedAction = "fixtures/gateway/error_unsupported_action.json"
     const val ErrorLaunchFailed = "fixtures/gateway/error_launch_failed.json"
+    const val ErrorBridgeUnavailable = "fixtures/gateway/error_bridge_unavailable.json"
 
     val ErrorFixtures = listOf(
         "fixtures/gateway/error_unauthorized.json",
         "fixtures/gateway/error_not_found.json",
         ErrorGoneStale,
-        "fixtures/gateway/error_bridge_unavailable.json",
+        ErrorBridgeUnavailable,
         ErrorConflictAlreadyHandled,
         ErrorAmbiguousPrefix,
         ErrorUnsupportedAction,

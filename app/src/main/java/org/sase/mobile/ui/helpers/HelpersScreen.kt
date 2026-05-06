@@ -410,6 +410,7 @@ private fun BeadRow(
 }
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 private fun BeadDetailPanel(
     state: HelperPaneState<MobileBeadDetailWire>,
     onInsert: (String) -> Unit,

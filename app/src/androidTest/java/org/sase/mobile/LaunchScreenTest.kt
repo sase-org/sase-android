@@ -1,10 +1,11 @@
 package org.sase.mobile
 
 import android.net.Uri
-import androidx.compose.ui.test.assertDoesNotExist
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -166,7 +167,7 @@ class LaunchScreenTest {
         composeRule.onNodeWithTag("launch_prompt_input").assertTextContains("Review this screenshot")
 
         composeRule.onNodeWithTag("launch_clear_image").performClick()
-        composeRule.onNodeWithTag("launch_image_summary").assertDoesNotExist()
+        composeRule.onAllNodesWithTag("launch_image_summary").assertCountEquals(0)
     }
 
     @Test

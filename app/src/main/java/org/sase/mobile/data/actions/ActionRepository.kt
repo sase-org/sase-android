@@ -19,6 +19,7 @@ class ActionRepository(
     private val tokenVault: TokenVault,
     private val clientFactory: (baseUrl: String, tokenProvider: () -> String?) -> GatewayApiClient,
     private val notificationRepository: NotificationRepository?,
+    private val draftStore: ActionDraftStore,
 ) : NotificationActionController {
     override suspend fun submitAction(
         notificationId: String,
@@ -48,6 +49,7 @@ class ActionRepository(
         val client = clientFactory(session.baseUrl) { token }
         return when (val result = submit(client, identity.prefix, choice)) {
             is GatewayApiResult.Success -> {
+                draftKeyForSubmission(notificationId, action, choice)?.let { draftStore.clear(it) }
                 ActionSubmissionState.Success(
                     result = result.value,
                     refreshedDetail = refreshAfterMutation(notificationId, refreshInbox = true),
@@ -65,6 +67,16 @@ class ActionRepository(
         }
     }
 
+    override suspend fun readDraft(key: ActionDraftKey): String? = draftStore.read(key)
+
+    override suspend fun saveDraft(key: ActionDraftKey, text: String) {
+        draftStore.write(key, text)
+    }
+
+    override suspend fun discardDraft(key: ActionDraftKey) {
+        draftStore.clear(key)
+    }
+
     private suspend fun submit(
         client: GatewayApiClient,
         prefix: String,
@@ -72,10 +84,18 @@ class ActionRepository(
     ): GatewayApiResult<ActionResultWire> {
         return when (choice) {
             is NotificationActionChoice.Plan -> client.submitPlanAction(
-                PlanActionRequestWire(prefix = prefix, choice = choice.choice),
+                PlanActionRequestWire(
+                    prefix = prefix,
+                    choice = choice.choice,
+                    feedback = choice.feedback,
+                ),
             )
             is NotificationActionChoice.Hitl -> client.submitHitlAction(
-                HitlActionRequestWire(prefix = prefix, choice = choice.choice),
+                HitlActionRequestWire(
+                    prefix = prefix,
+                    choice = choice.choice,
+                    feedback = choice.feedback,
+                ),
             )
             is NotificationActionChoice.QuestionOption -> client.submitQuestionAction(
                 QuestionActionRequestWire(
@@ -83,6 +103,14 @@ class ActionRepository(
                     choice = QuestionActionChoiceWire.Answer,
                     selectedOptionLabel = choice.label,
                     selectedOptionIndex = choice.index,
+                    globalNote = choice.globalNote,
+                ),
+            )
+            is NotificationActionChoice.QuestionCustom -> client.submitQuestionAction(
+                QuestionActionRequestWire(
+                    prefix = prefix,
+                    choice = QuestionActionChoiceWire.Custom,
+                    customAnswer = choice.answer,
                 ),
             )
         }
@@ -97,5 +125,23 @@ class ActionRepository(
             repository.fullRefresh(RefreshReason.Manual)
         }
         return repository.refreshDetail(notificationId) as? NotificationDetailState.Ready
+    }
+
+    private fun draftKeyForSubmission(
+        notificationId: String,
+        action: MobileActionDetailWire,
+        choice: NotificationActionChoice,
+    ): ActionDraftKey? {
+        val key = when (choice) {
+            is NotificationActionChoice.Plan ->
+                if (choice.feedback == null) null else choice.choice.name.lowercase()
+            is NotificationActionChoice.Hitl ->
+                if (choice.feedback == null) null else choice.choice.name.lowercase()
+            is NotificationActionChoice.QuestionOption ->
+                if (choice.globalNote == null) null else "question-${choice.index}-note"
+            is NotificationActionChoice.QuestionCustom ->
+                if (choice.answer == null) null else "question-custom"
+        } ?: return null
+        return ActionDraftKey(notificationId, action.kind, key)
     }
 }

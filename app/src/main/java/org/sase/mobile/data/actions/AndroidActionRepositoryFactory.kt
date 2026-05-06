@@ -24,6 +24,7 @@ object AndroidActionRepositoryFactory {
                 )
             },
             notificationRepository = notificationRepository,
+            draftStore = DataStoreActionDraftStore(context),
         )
     }
 }

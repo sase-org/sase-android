@@ -1,6 +1,6 @@
 package org.sase.mobile
 
-import androidx.compose.ui.test.assertDoesNotExist
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -66,7 +66,7 @@ class HelpersScreenTest {
         composeRule.onNodeWithText("Xprompts").performClick()
         composeRule.onNodeWithText("bd/work_phase_bead").assertIsDisplayed()
         composeRule.onNodeWithTag("helper_search_input").performTextInput("missing")
-        composeRule.onNodeWithText("bd/work_phase_bead").assertDoesNotExist()
+        composeRule.onAllNodesWithText("bd/work_phase_bead").assertCountEquals(0)
 
         composeRule.onNodeWithText("Beads").performClick()
         composeRule.onNodeWithText("Workflow Helper Screens And Pickers").assertIsDisplayed()

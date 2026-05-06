@@ -46,10 +46,10 @@ class NotificationRepository(
     private val mutableInbox = MutableStateFlow(NotificationInboxState())
     val inbox: StateFlow<NotificationInboxState> = mutableInbox.asStateFlow()
 
-    private val mutableConnection = MutableStateFlow(NotificationConnectionState.Stopped)
+    private val mutableConnection = MutableStateFlow<NotificationConnectionState>(NotificationConnectionState.Stopped)
     val connection: StateFlow<NotificationConnectionState> = mutableConnection.asStateFlow()
 
-    private val mutableRefresh = MutableStateFlow(NotificationRefreshState.Idle)
+    private val mutableRefresh = MutableStateFlow<NotificationRefreshState>(NotificationRefreshState.Idle)
     val refresh: StateFlow<NotificationRefreshState> = mutableRefresh.asStateFlow()
 
     private val mutableHelperEvents = MutableStateFlow(0)

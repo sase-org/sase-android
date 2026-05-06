@@ -42,7 +42,7 @@ class FakeGateway : Closeable {
     }
 
     fun enqueueSse(vararg eventJson: String) {
-        val body = eventJson.joinToString(separator = "\n\n") { "data: $it" } + "\n\n"
+        val body = eventJson.joinToString(separator = "\n\n") { it.toSseDataBlock() } + "\n\n"
         server.enqueue(
             MockResponse()
                 .setResponseCode(200)
@@ -231,7 +231,7 @@ class FakeGateway : Closeable {
         if (request.getHeader("Authorization") != null) {
             return jsonResponse(UnauthorizedResponse, statusCode = 401)
         }
-        val body = request.body.readUtf8()
+        val body = request.body.clone().readUtf8()
         val parsed = try {
             jsonFormat.decodeFromString(PairFinishRequestWire.serializer(), body)
         } catch (_: SerializationException) {
@@ -249,7 +249,7 @@ class FakeGateway : Closeable {
     private fun actionResponse(request: RecordedRequest): MockResponse {
         val routePath = request.path?.substringBefore("?").orEmpty()
         val prefix = routePath.split("/").getOrNull(5).orEmpty()
-        val body = request.body.readUtf8()
+        val body = request.body.clone().readUtf8()
         val bodyError = validateJsonBody(body)
         if (bodyError != null) {
             return bodyError
@@ -285,7 +285,7 @@ class FakeGateway : Closeable {
         request: RecordedRequest,
         serializer: kotlinx.serialization.KSerializer<T>,
     ): MockResponse? {
-        val body = request.body.readUtf8()
+        val body = request.body.clone().readUtf8()
         return try {
             jsonFormat.decodeFromString(serializer, body)
             null
@@ -318,11 +318,15 @@ class FakeGateway : Closeable {
     }
 
     private fun sse(eventBodies: List<String>): MockResponse {
-        val body = eventBodies.joinToString(separator = "\n\n") { "data: $it" } + "\n\n"
+        val body = eventBodies.joinToString(separator = "\n\n") { it.toSseDataBlock() } + "\n\n"
         return MockResponse()
             .setResponseCode(200)
             .setHeader("Content-Type", "text/event-stream")
             .setBody(body)
+    }
+
+    private fun String.toSseDataBlock(): String {
+        return lineSequence().joinToString(separator = "\n") { line -> "data: $line" }
     }
 
     companion object {

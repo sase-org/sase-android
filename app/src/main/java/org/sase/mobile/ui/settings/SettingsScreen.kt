@@ -35,9 +35,9 @@ import org.sase.mobile.data.session.SessionStatus
 @Composable
 fun SettingsScreen(
     controller: SessionController,
+    modifier: Modifier = Modifier,
     onOpenUpdate: () -> Unit = {},
     onOpenHelpers: () -> Unit = {},
-    modifier: Modifier = Modifier,
 ) {
     val state by controller.state.collectAsState()
     val scope = rememberCoroutineScope()

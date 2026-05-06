@@ -66,12 +66,12 @@ import org.sase.mobile.ui.theme.SaseMobileTheme
 fun LaunchScreen(
     state: AgentsState,
     onLaunch: suspend (MobileAgentTextLaunchRequestWire) -> AgentActionState,
+    modifier: Modifier = Modifier,
     onLaunchImage: suspend (MobileAgentImageLaunchRequestWire) -> AgentActionState = {
         AgentActionState.Failed("Image launch is unavailable")
     },
     onOpenAgents: () -> Unit,
     onOpenSettings: () -> Unit,
-    modifier: Modifier = Modifier,
     helperRepository: HelperRepository? = null,
     helperEventVersion: Int = 0,
     prefillPrompt: String? = null,

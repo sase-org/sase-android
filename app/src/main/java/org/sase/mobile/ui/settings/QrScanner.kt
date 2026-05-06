@@ -34,6 +34,7 @@ import androidx.core.content.ContextCompat
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.common.InputImage
 
+@SuppressLint("UnsafeOptInUsageError")
 @Composable
 fun QrScannerDialog(
     onPayloadScanned: (String) -> Unit,
@@ -88,7 +89,7 @@ fun QrScannerDialog(
     )
 }
 
-@OptIn(ExperimentalGetImage::class)
+@ExperimentalGetImage
 @SuppressLint("MissingPermission")
 @Composable
 private fun QrCameraPreview(

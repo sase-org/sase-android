@@ -4,6 +4,8 @@ import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import okhttp3.HttpUrl
@@ -223,7 +225,7 @@ class NotificationRepositoryTest {
             clock = Clock.fixed(Now, ZoneOffset.UTC),
             delayProvider = { _ -> },
             onHelpersChanged = onHelpersChanged,
-            scope = this,
+            scope = CoroutineScope(SupervisorJob()),
         )
     }
 

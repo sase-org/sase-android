@@ -30,11 +30,15 @@ class ActionRepositoryTest {
         val hitlControls = deriveNotificationActionControls(hitl)
         val questionControls = deriveNotificationActionControls(question)
 
-        assertThat(planControls.map { it.key }).containsExactly("approve", "run", "reject", "epic", "legend")
+        assertThat(planControls.map { it.key }).containsExactly("approve", "run", "reject", "epic", "legend", "feedback")
         assertThat(planControls.single { it.key == "approve" }.requiresConfirmation).isFalse()
         assertThat(planControls.single { it.key == "run" }.requiresConfirmation).isTrue()
-        assertThat(hitlControls.map { it.key }).containsExactly("accept", "reject")
+        assertThat(planControls.single { it.key == "feedback" }.textEntry?.submitLabel)
+            .isEqualTo("Send feedback")
+        assertThat(hitlControls.map { it.key }).containsExactly("accept", "reject", "feedback")
         assertThat((questionControls.first().choice as NotificationActionChoice.QuestionOption).label).isEqualTo("Yes")
+        assertThat(questionControls.map { it.key })
+            .containsExactly("question-0", "question-1", "question-0-note", "question-1-note", "question-custom")
     }
 
     @Test
@@ -91,6 +95,101 @@ class ActionRepositoryTest {
     }
 
     @Test
+    fun textActionsSubmitTypedBodiesAndClearDraftAfterSuccess() = runTest {
+        FakeGateway().use { gateway ->
+            gateway.installEpicSixHarness()
+            val draftStore = InMemoryActionDraftStore()
+            val repository = actionRepository(
+                baseUrl = gateway.baseUrl,
+                notificationRepository = null,
+                draftStore = draftStore,
+            )
+            val key = ActionDraftKey("plan0001-review", MobileActionKindWire.PlanApproval, "feedback")
+            repository.saveDraft(key, "Please add instrumentation tests.")
+
+            val result = repository.submitAction(
+                notificationId = "plan0001-review",
+                action = actionDetail(),
+                choice = NotificationActionChoice.Plan(
+                    choice = PlanActionChoiceWire.Feedback,
+                    feedback = "Please add instrumentation tests.",
+                ),
+            )
+
+            assertThat(result).isInstanceOf(ActionSubmissionState.Success::class.java)
+            assertThat(repository.readDraft(key)).isNull()
+            val request = gateway.takeRequest()
+            val body = request.body.readUtf8()
+            assertThat(request.path).isEqualTo("/api/v1/actions/plan/plan0001/feedback")
+            assertThat(body).contains("\"feedback\":\"Please add instrumentation tests.\"")
+            assertThat(body).doesNotContain("\"prefix\"")
+            assertThat(body).doesNotContain("\"choice\"")
+        }
+    }
+
+    @Test
+    fun failedTextActionKeepsDraftAndStaleFailureRefreshesDetail() = runTest {
+        FakeGateway().use { gateway ->
+            gateway.installEpicSixHarness()
+            val draftStore = InMemoryActionDraftStore()
+            val repository = actionRepository(
+                baseUrl = gateway.baseUrl,
+                notificationRepository = notificationRepository(gateway.baseUrl),
+                draftStore = draftStore,
+            )
+            val key = ActionDraftKey("plan0001-review", MobileActionKindWire.Hitl, "feedback")
+            repository.saveDraft(key, "Need a safer default.")
+
+            val result = repository.submitAction(
+                notificationId = "plan0001-review",
+                action = actionDetail(prefix = "stale").copy(kind = MobileActionKindWire.Hitl),
+                choice = NotificationActionChoice.Hitl(
+                    choice = HitlActionChoiceWire.Feedback,
+                    feedback = "Need a safer default.",
+                ),
+            )
+
+            assertThat((result as ActionSubmissionState.Failure).failure.kind).isEqualTo(ActionFailureKind.Stale)
+            assertThat(result.refreshedDetail).isNotNull()
+            assertThat(repository.readDraft(key)).isEqualTo("Need a safer default.")
+        }
+    }
+
+    @Test
+    fun questionCustomAndOptionNoteUseQuestionActionBodies() = runTest {
+        FakeGateway().use { gateway ->
+            gateway.installEpicSixHarness()
+            val repository = actionRepository(gateway.baseUrl, notificationRepository = null)
+
+            assertThat(
+                repository.submitAction(
+                    notificationId = "quest001-answer",
+                    action = actionDetail().copy(kind = MobileActionKindWire.UserQuestion),
+                    choice = NotificationActionChoice.QuestionCustom(answer = "Use the smaller migration path."),
+                ),
+            ).isInstanceOf(ActionSubmissionState.Success::class.java)
+            assertThat(
+                repository.submitAction(
+                    notificationId = "quest001-answer",
+                    action = actionDetail().copy(kind = MobileActionKindWire.UserQuestion),
+                    choice = NotificationActionChoice.QuestionOption(
+                        label = "Yes",
+                        index = 0,
+                        globalNote = "Only after tests pass.",
+                    ),
+                ),
+            ).isInstanceOf(ActionSubmissionState.Success::class.java)
+
+            val customRequest = gateway.takeRequest()
+            val optionRequest = gateway.takeRequest()
+            assertThat(customRequest.path).isEqualTo("/api/v1/actions/question/plan0001/custom")
+            assertThat(customRequest.body.readUtf8()).contains("\"custom_answer\":\"Use the smaller migration path.\"")
+            assertThat(optionRequest.path).isEqualTo("/api/v1/actions/question/plan0001/answer")
+            assertThat(optionRequest.body.readUtf8()).contains("\"global_note\":\"Only after tests pass.\"")
+        }
+    }
+
+    @Test
     fun staleAndAlreadyHandledFailuresRefreshAuthoritativeState() = runTest {
         FakeGateway().use { gateway ->
             gateway.installEpicSixHarness()
@@ -136,6 +235,7 @@ class ActionRepositoryTest {
     private fun actionRepository(
         baseUrl: HttpUrl,
         notificationRepository: NotificationRepository?,
+        draftStore: ActionDraftStore = InMemoryActionDraftStore(),
     ): ActionRepository {
         return ActionRepository(
             sessionStorage = InMemoryHostSessionStorage(pairedSession(baseUrl)),
@@ -148,6 +248,7 @@ class ActionRepositoryTest {
                 )
             },
             notificationRepository = notificationRepository,
+            draftStore = draftStore,
         )
     }
 
