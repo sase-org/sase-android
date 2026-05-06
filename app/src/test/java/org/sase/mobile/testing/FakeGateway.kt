@@ -12,6 +12,9 @@ class FakeGateway : Closeable {
     val baseUrl: HttpUrl
         get() = server.url("/")
 
+    val requestCount: Int
+        get() = server.requestCount
+
     fun enqueueJson(
         body: String,
         statusCode: Int = 200,
