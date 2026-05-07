@@ -27,9 +27,10 @@ embed SASE core logic on the phone.
 - Automated instrumentation smoke coverage for pairing, inbox/detail action UI,
   launch, agents, helpers, update, and settings navigation
 
-Epic 7 adds notification permission UX, local hint rendering, and foreground
-connected mode, and FCM push hints. Later phases will add packaging, security
-review, and release hardening.
+Epic 7 adds notification permission UX, local hint rendering, foreground
+connected mode, FCM push hints, private APK packaging, remote-access docs, and
+the MVP threat model. The cross-repo runbook lives at
+`../sase_100/docs/mobile_mvp_runbook.md`.
 
 ## Pairing QR Payload
 
@@ -136,6 +137,41 @@ hint-only: they may contain event IDs, categories, short safe title/body text,
 and routing IDs, but the app always refreshes authoritative host state through
 the paired gateway after receipt or notification tap.
 
+## Packaging
+
+Debug APK:
+
+```bash
+./gradlew testDebugUnitTest lintDebug assembleDebug
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
+Internal Firebase APK:
+
+1. Keep `app/google-services.json` local and uncommitted.
+2. Build with the normal debug or release task.
+3. Configure the host gateway push provider separately in SASE config or with
+   `sase mobile gateway start -P fcm ...`.
+
+Signed release APK:
+
+```bash
+SASE_ANDROID_RELEASE_STORE_FILE=/absolute/path/to/sase-mobile-upload.jks \
+SASE_ANDROID_RELEASE_STORE_PASSWORD=... \
+SASE_ANDROID_RELEASE_KEY_ALIAS=sase-mobile \
+SASE_ANDROID_RELEASE_KEY_PASSWORD=... \
+./gradlew testDebugUnitTest lintDebug assembleRelease
+```
+
+The same signing values can live in local-only `local.properties` or Gradle
+properties. Keystores, signing passwords, Firebase service accounts,
+`google-services.json`, and local tailnet hostnames must not be committed.
+
+Release minification is currently disabled for private/internal distribution.
+Revisit minification and keep rules before broad public release. Preserve the
+application ID `org.sase.mobile` and increase `versionCode` for upgrades so
+paired-session state and app-private caches survive normal installs.
+
 ## Fake Gateway Smoke
 
 Unit tests include a route-based fake gateway harness that serves health,
@@ -175,6 +211,9 @@ UI, helper insertion/search, update start/status UI, SSE resync, and forgetting
 the paired host.
 
 ## Manual Real-Host Smoke Checklist
+
+Use `../sase_100/docs/mobile_mvp_runbook.md` for the full packaging, Tailscale
+Serve, threat-model, troubleshooting, and rollback procedure.
 
 1. From the SASE repo, start the local mobile gateway:
 
@@ -229,7 +268,7 @@ the paired host.
 
 ## Known Limitations
 
-- Packaging, security review, and release hardening remain Epic 7 work.
+- The MVP is for private/internal APK distribution, not Play Store production.
 - FCM push requires a local `app/google-services.json` and matching host
   gateway push-provider configuration. Normal unit tests never require real FCM
   credentials.

@@ -1,9 +1,23 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
 }
+
+val localProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.isFile) {
+        file.inputStream().use(::load)
+    }
+}
+
+fun releaseSecret(name: String): String? =
+    providers.gradleProperty(name).orNull
+        ?: localProperties.getProperty(name)
+        ?: providers.environmentVariable(name).orNull
 
 android {
     namespace = "org.sase.mobile"
@@ -19,8 +33,38 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        create("release") {
+            val releaseStoreFile = releaseSecret("SASE_ANDROID_RELEASE_STORE_FILE")
+            val releaseStorePassword = releaseSecret("SASE_ANDROID_RELEASE_STORE_PASSWORD")
+            val releaseKeyAlias = releaseSecret("SASE_ANDROID_RELEASE_KEY_ALIAS")
+            val releaseKeyPassword = releaseSecret("SASE_ANDROID_RELEASE_KEY_PASSWORD")
+
+            if (
+                !releaseStoreFile.isNullOrBlank() &&
+                    !releaseStorePassword.isNullOrBlank() &&
+                    !releaseKeyAlias.isNullOrBlank() &&
+                    !releaseKeyPassword.isNullOrBlank()
+            ) {
+                storeFile = file(releaseStoreFile)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
+            val releaseSigning = signingConfigs.getByName("release")
+            if (
+                releaseSigning.storeFile != null &&
+                    !releaseSigning.storePassword.isNullOrBlank() &&
+                    !releaseSigning.keyAlias.isNullOrBlank() &&
+                    !releaseSigning.keyPassword.isNullOrBlank()
+            ) {
+                signingConfig = releaseSigning
+            }
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
