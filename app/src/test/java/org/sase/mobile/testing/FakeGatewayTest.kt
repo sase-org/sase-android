@@ -1,12 +1,16 @@
 package org.sase.mobile.testing
 
 import com.google.common.truth.Truth.assertThat
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.junit.Test
 import org.sase.mobile.data.api.GatewayFixturePaths
+import org.sase.mobile.data.api.dto.GatewayJson
+import org.sase.mobile.data.notifications.push.parsePushHintData
 import org.sase.mobile.data.api.readResource
 
 class FakeGatewayTest {
@@ -104,6 +108,56 @@ class FakeGatewayTest {
         }
     }
 
+    @Test
+    fun hardeningHarnessCoversPushSubscriptionRoutesAndHintFixtures() {
+        FakeGateway().use { gateway ->
+            gateway.installEpicSixHarness()
+
+            client.newCall(
+                Request.Builder()
+                    .url(gateway.baseUrl.resolve("/api/v1/session/push-subscriptions")!!)
+                    .header("Authorization", "Bearer ${FakeGateway.SmokeAuthToken}")
+                    .post(PushSubscriptionBody.toRequestBody("application/json".toMediaType()))
+                    .build(),
+            ).execute().use { response ->
+                assertThat(response.code).isEqualTo(200)
+                assertThat(response.body?.string()).contains("\"provider\":\"test\"")
+            }
+
+            client.newCall(
+                Request.Builder()
+                    .url(gateway.baseUrl.resolve("/api/v1/session/push-subscriptions")!!)
+                    .header("Authorization", "Bearer ${FakeGateway.SmokeAuthToken}")
+                    .build(),
+            ).execute().use { response ->
+                assertThat(response.code).isEqualTo(200)
+                assertThat(response.body?.string()).contains("sub_test_1")
+            }
+
+            client.newCall(
+                Request.Builder()
+                    .url(gateway.baseUrl.resolve("/api/v1/session/push-subscriptions/sub_test_1")!!)
+                    .header("Authorization", "Bearer ${FakeGateway.SmokeAuthToken}")
+                    .delete()
+                    .build(),
+            ).execute().use { response ->
+                assertThat(response.code).isEqualTo(200)
+                assertThat(response.body?.string()).contains("\"revoked\":true")
+            }
+
+            val hint = parsePushHintData(pushHintFixtureMap())
+            assertThat(hint?.notificationId).isEqualTo("plan0001-review")
+            assertThat(hint?.toLocalHint()?.target.toString()).contains("plan0001-review")
+        }
+    }
+
+    private fun pushHintFixtureMap(): Map<String, String> {
+        return GatewayJson.format
+            .parseToJsonElement(readResource(GatewayFixturePaths.PushHintNotification))
+            .jsonObject
+            .mapValues { (_, value) -> value.jsonPrimitive.content }
+    }
+
     private companion object {
         val PairFinishBody = """
             {
@@ -115,6 +169,19 @@ class FakeGatewayTest {
                 "platform": "android",
                 "app_version": "0.1.0"
               }
+            }
+        """.trimIndent()
+
+        val PushSubscriptionBody = """
+            {
+              "schema_version": 1,
+              "provider": "test",
+              "provider_token": "test-token",
+              "app_instance_id": "app-instance-1",
+              "platform": "android",
+              "app_version": "0.1.0",
+              "device_display_name": "Pixel 9",
+              "hint_categories": ["notifications", "agents"]
             }
         """.trimIndent()
     }

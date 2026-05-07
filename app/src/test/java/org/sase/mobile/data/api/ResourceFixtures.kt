@@ -20,6 +20,7 @@ internal object GatewayFixturePaths {
     const val EventAgentsChanged = "fixtures/gateway/event_agents_changed.json"
     const val EventHelpersChanged = "fixtures/gateway/event_helpers_changed.json"
     const val EventResyncRequired = "fixtures/gateway/event_resync_required.json"
+    const val PushHintNotification = "fixtures/gateway/push_hint_notification.json"
     const val ActionSuccess = "fixtures/gateway/action_success.json"
     const val AgentsList = "fixtures/gateway/agents_list.json"
     const val AgentResumeOptions = "fixtures/gateway/agent_resume_options.json"

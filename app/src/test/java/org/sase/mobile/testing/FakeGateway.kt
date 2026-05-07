@@ -16,6 +16,12 @@ import org.sase.mobile.data.api.dto.MobileAgentRetryRequestWire
 import org.sase.mobile.data.api.dto.MobileAgentTextLaunchRequestWire
 import org.sase.mobile.data.api.dto.MobileUpdateStartRequestWire
 import org.sase.mobile.data.api.dto.PairFinishRequestWire
+import org.sase.mobile.data.api.dto.PushProviderWire
+import org.sase.mobile.data.api.dto.PushSubscriptionDeleteResponseWire
+import org.sase.mobile.data.api.dto.PushSubscriptionListResponseWire
+import org.sase.mobile.data.api.dto.PushSubscriptionRecordWire
+import org.sase.mobile.data.api.dto.PushSubscriptionRegisterResponseWire
+import org.sase.mobile.data.api.dto.PushSubscriptionRequestWire
 import org.sase.mobile.data.api.readResource
 
 class FakeGateway : Closeable {
@@ -106,6 +112,8 @@ class FakeGateway : Closeable {
         authToken: String = SmokeAuthToken,
     ) {
         server.dispatcher = object : Dispatcher() {
+            private val pushSubscriptions = linkedMapOf<String, PushSubscriptionRecordWire>()
+
             override fun dispatch(request: RecordedRequest): MockResponse {
                 val routePath = request.path?.substringBefore("?")
                 val unauthorized = authorized(request, authToken)
@@ -114,6 +122,27 @@ class FakeGateway : Closeable {
                 }
 
                 return when {
+                    request.method == "GET" && routePath == "/api/v1/session/push-subscriptions" -> {
+                        jsonResponse(
+                            jsonFormat.encodeToString(
+                                PushSubscriptionListResponseWire.serializer(),
+                                PushSubscriptionListResponseWire(
+                                    schemaVersion = 1,
+                                    subscriptions = pushSubscriptions.values.toList(),
+                                ),
+                            ),
+                        )
+                    }
+
+                    request.method == "POST" && routePath == "/api/v1/session/push-subscriptions" -> {
+                        registerPushSubscription(request, pushSubscriptions)
+                    }
+
+                    request.method == "DELETE" &&
+                        routePath?.startsWith("/api/v1/session/push-subscriptions/") == true -> {
+                        deletePushSubscription(routePath, pushSubscriptions)
+                    }
+
                     request.method == "POST" && routePath?.startsWith("/api/v1/actions/plan/") == true -> {
                         actionResponse(request)
                     }
@@ -215,6 +244,76 @@ class FakeGateway : Closeable {
                 }
             }
         }
+    }
+
+    private fun registerPushSubscription(
+        request: RecordedRequest,
+        pushSubscriptions: MutableMap<String, PushSubscriptionRecordWire>,
+    ): MockResponse {
+        val body = request.body.clone().readUtf8()
+        val payload = try {
+            jsonFormat.decodeFromString(PushSubscriptionRequestWire.serializer(), body)
+        } catch (_: SerializationException) {
+            return jsonResponse(InvalidJsonResponse, statusCode = 400)
+        } catch (_: IllegalArgumentException) {
+            return jsonResponse(InvalidJsonResponse, statusCode = 400)
+        }
+        if (payload.providerToken.isBlank() || payload.hintCategories.isEmpty()) {
+            return jsonResponse(InvalidJsonResponse, statusCode = 400)
+        }
+
+        val existing = pushSubscriptions.values.firstOrNull {
+            it.provider == payload.provider &&
+                it.providerToken == payload.providerToken &&
+                it.appInstanceId == payload.appInstanceId
+        }
+        val id = existing?.id ?: "sub_${payload.provider.wireValue()}_1"
+        val record = PushSubscriptionRecordWire(
+            schemaVersion = 1,
+            id = id,
+            provider = payload.provider,
+            providerToken = payload.providerToken,
+            appInstanceId = payload.appInstanceId,
+            deviceId = "dev_pixel",
+            deviceDisplayName = payload.deviceDisplayName,
+            platform = payload.platform,
+            appVersion = payload.appVersion,
+            hintCategories = payload.hintCategories,
+            enabledAt = existing?.enabledAt ?: "2026-05-07T12:00:00Z",
+            lastSeenAt = existing?.let { "2026-05-07T12:01:00Z" },
+            disabledAt = null,
+        )
+        pushSubscriptions[id] = record
+        return jsonResponse(
+            jsonFormat.encodeToString(
+                PushSubscriptionRegisterResponseWire.serializer(),
+                PushSubscriptionRegisterResponseWire(
+                    schemaVersion = 1,
+                    created = existing == null,
+                    subscription = record,
+                ),
+            ),
+        )
+    }
+
+    private fun deletePushSubscription(
+        routePath: String,
+        pushSubscriptions: MutableMap<String, PushSubscriptionRecordWire>,
+    ): MockResponse {
+        val id = routePath.substringAfterLast("/")
+        val active = pushSubscriptions.remove(id)
+            ?: return jsonResponse(NotFoundResponse, statusCode = 404)
+        val revoked = active.copy(disabledAt = "2026-05-07T12:02:00Z")
+        return jsonResponse(
+            jsonFormat.encodeToString(
+                PushSubscriptionDeleteResponseWire.serializer(),
+                PushSubscriptionDeleteResponseWire(
+                    schemaVersion = 1,
+                    revoked = true,
+                    subscription = revoked,
+                ),
+            ),
+        )
     }
 
     fun takeRequest(): RecordedRequest = server.takeRequest()
@@ -327,6 +426,15 @@ class FakeGateway : Closeable {
 
     private fun String.toSseDataBlock(): String {
         return lineSequence().joinToString(separator = "\n") { line -> "data: $line" }
+    }
+
+    private fun PushProviderWire.wireValue(): String {
+        return when (this) {
+            PushProviderWire.Fcm -> "fcm"
+            PushProviderWire.UnifiedPush -> "unified_push"
+            PushProviderWire.Ntfy -> "ntfy"
+            PushProviderWire.Test -> "test"
+        }
     }
 
     companion object {

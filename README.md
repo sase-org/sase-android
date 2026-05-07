@@ -80,6 +80,14 @@ Run connected instrumentation tests when an emulator or device is available:
 ./gradlew connectedDebugAndroidTest
 ```
 
+CI-friendly hardening subsets:
+
+```bash
+./gradlew testDebugUnitTest --tests org.sase.mobile.testing.BackgroundHardeningSmokeTest
+./gradlew testDebugUnitTest --tests org.sase.mobile.testing.FakeGatewayTest
+./gradlew testDebugUnitTest --tests 'org.sase.mobile.data.notifications.push.*'
+```
+
 The Android app is expected to develop against the gateway contract from the
 SASE core repository:
 
