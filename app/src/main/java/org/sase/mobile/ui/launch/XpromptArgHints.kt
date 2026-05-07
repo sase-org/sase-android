@@ -22,6 +22,11 @@ data class PromptHintEdit(
     val hint: ActiveXpromptArgHint,
 )
 
+data class ParsedPromptReferenceToken(
+    val lookupName: String,
+    val tokenRange: TextRange,
+)
+
 fun MobileXpromptCatalogEntryWire.visibleInputs(): List<MobileXpromptInputWire> {
     return inputs.sortedBy { it.position }
 }
@@ -59,6 +64,50 @@ internal fun hintForSelectedXprompt(
     }
 }
 
+internal fun activeXpromptArgHint(
+    value: TextFieldValue,
+    catalogByName: Map<String, MobileXpromptCatalogEntryWire>,
+): ActiveXpromptArgHint? {
+    if (value.selection.start != value.selection.end) {
+        return null
+    }
+    val cursor = value.selection.start.coerceIn(0, value.text.length)
+    val token = typedColonReferenceToken(value.text, cursor) ?: return null
+    val parsed = parsePromptReferenceToken(token.text, token.range.start) ?: return null
+    val entry = catalogByName[parsed.lookupName]
+        ?: catalogByName[parsed.lookupName.replace("__", "/")]
+        ?: return null
+    return hintForSelectedXprompt(entry, parsed.tokenRange)
+}
+
+internal fun parsePromptReferenceToken(
+    token: String,
+    tokenStart: Int = 0,
+): ParsedPromptReferenceToken? {
+    if (!token.endsWith(":")) {
+        return null
+    }
+    val body = token.dropLast(1)
+    val nameWithSuffix = when {
+        body.startsWith("#!") -> body.drop(2)
+        body.startsWith("#") -> body.drop(1)
+        else -> return null
+    }
+    if (nameWithSuffix.isEmpty() || nameWithSuffix.endsWith("+")) {
+        return null
+    }
+    val lookupName = nameWithSuffix
+        .removeSuffix("!!")
+        .removeSuffix("??")
+    if (lookupName.isEmpty() || !lookupName.all(::isPromptReferenceNameChar)) {
+        return null
+    }
+    return ParsedPromptReferenceToken(
+        lookupName = lookupName,
+        tokenRange = TextRange(tokenStart, tokenStart + token.length),
+    )
+}
+
 internal fun insertPromptSnippetWithRange(
     prompt: TextFieldValue,
     snippet: String,
@@ -73,6 +122,41 @@ internal fun insertPromptSnippetWithRange(
         value = value,
         insertedRange = TextRange(start, cursor),
     )
+}
+
+private data class PromptReferenceToken(
+    val text: String,
+    val range: TextRange,
+)
+
+private fun typedColonReferenceToken(text: String, cursor: Int): PromptReferenceToken? {
+    if (cursor == 0 || text[cursor - 1] != ':') {
+        return null
+    }
+    val markerIndex = text.lastIndexOf('#', startIndex = cursor - 1)
+    if (markerIndex < 0 || !hasValidReferenceLeadingContext(text, markerIndex)) {
+        return null
+    }
+    val token = text.substring(markerIndex, cursor)
+    return PromptReferenceToken(token, TextRange(markerIndex, cursor))
+}
+
+private fun hasValidReferenceLeadingContext(text: String, markerIndex: Int): Boolean {
+    if (markerIndex == 0) {
+        return true
+    }
+    return when (text[markerIndex - 1]) {
+        ' ', '\t', '\n', '\r', '(', '[', '{', '"', '\'' -> true
+        else -> false
+    }
+}
+
+private fun isPromptReferenceNameChar(char: Char): Boolean {
+    return char.isLetterOrDigit() ||
+        char == '_' ||
+        char == '-' ||
+        char == '/' ||
+        char == '.'
 }
 
 internal fun rewriteActiveXpromptAsColon(

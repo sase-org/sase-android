@@ -192,8 +192,10 @@ fun LaunchScreen(
             value = prompt,
             onValueChange = {
                 prompt = it
-                activeArgHint = activeArgHint?.takeIf { hint ->
-                    hint.referenceRange.end <= it.text.length
+                activeArgHint = if (helperState.loading || helperState.failureMessage != null) {
+                    null
+                } else {
+                    activeXpromptArgHint(it, catalogByName)
                 }
             },
             label = { Text("Prompt") },
