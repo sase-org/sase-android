@@ -338,6 +338,7 @@ sealed interface NotificationRefreshState {
 enum class RefreshReason {
     AppStart,
     Manual,
+    PushHint,
     Reconnect,
     NotificationsChanged,
     ResyncRequired,

@@ -314,6 +314,7 @@ private val RefreshReason.label: String
     get() = when (this) {
         RefreshReason.AppStart -> "app state"
         RefreshReason.Manual -> "inbox"
+        RefreshReason.PushHint -> "notification hint"
         RefreshReason.Reconnect -> "after reconnect"
         RefreshReason.NotificationsChanged -> "notifications"
         RefreshReason.ResyncRequired -> "full state"

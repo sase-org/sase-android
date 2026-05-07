@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.StateFlow
 import org.junit.Rule
 import org.junit.Test
 import org.sase.mobile.data.session.ManualPairingRequest
+import org.sase.mobile.data.notifications.local.NotificationPermissionState
 import org.sase.mobile.data.session.PairingResult
 import org.sase.mobile.data.session.SessionController
 import org.sase.mobile.data.session.SessionStatus
@@ -32,6 +33,23 @@ class SettingsScreenTest {
         composeRule.onNodeWithText("Scan QR").assertIsDisplayed()
         composeRule.onNodeWithText("Forget host").assertIsDisplayed()
     }
+
+    @Test
+    fun showsNotificationPermissionControls() {
+        composeRule.setContent {
+            SaseMobileTheme {
+                SettingsScreen(
+                    controller = FakeSessionController(),
+                    notificationPermissionState = NotificationPermissionState.DeniedCanAsk,
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Mobile notifications").assertIsDisplayed()
+        composeRule.onNodeWithText("Allow notifications").assertIsDisplayed()
+        composeRule.onNodeWithText("Background notification delivery is inactive until permission is allowed.")
+            .assertIsDisplayed()
+    }
 }
 
 private class FakeSessionController : SessionController {
@@ -52,4 +70,3 @@ private class FakeSessionController : SessionController {
 
     override suspend fun forgetHost() = Unit
 }
-

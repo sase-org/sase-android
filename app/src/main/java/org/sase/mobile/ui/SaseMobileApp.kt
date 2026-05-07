@@ -1,6 +1,13 @@
 package org.sase.mobile.ui
 
+import android.Manifest
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.os.Build
 import androidx.compose.foundation.layout.padding
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -40,7 +47,14 @@ import org.sase.mobile.data.helpers.AndroidUpdateRepositoryFactory
 import org.sase.mobile.data.helpers.HelperRepository
 import org.sase.mobile.data.helpers.UpdateController
 import org.sase.mobile.data.notifications.AndroidNotificationRepositoryFactory
+import org.sase.mobile.data.notifications.RefreshReason
 import org.sase.mobile.data.notifications.NotificationRepository
+import org.sase.mobile.data.notifications.local.AndroidNotificationPermissionController
+import org.sase.mobile.data.notifications.local.LocalHintCategory
+import org.sase.mobile.data.notifications.local.LocalHintNotificationRenderer
+import org.sase.mobile.data.notifications.local.LocalNotificationHint
+import org.sase.mobile.data.notifications.local.NotificationPermissionState
+import org.sase.mobile.data.notifications.local.SaseDeepLinkTarget
 import org.sase.mobile.data.session.AndroidSessionRepositoryFactory
 import org.sase.mobile.data.session.PairedHostSession
 import org.sase.mobile.data.session.SessionController
@@ -64,8 +78,11 @@ fun SaseMobileApp(
     agentRepository: AgentRepository? = null,
     helperRepository: HelperRepository? = null,
     updateController: UpdateController? = null,
+    pendingDeepLinkTarget: SaseDeepLinkTarget? = null,
+    onDeepLinkConsumed: () -> Unit = {},
 ) {
     val context = LocalContext.current
+    val activity = context.findActivity()
     val scope = rememberCoroutineScope()
     val controller = sessionController ?: remember(context.applicationContext, scope) {
         AndroidSessionRepositoryFactory.create(context.applicationContext, scope)
@@ -90,6 +107,18 @@ fun SaseMobileApp(
     val actions = actionController ?: remember(context.applicationContext, notifications) {
         AndroidActionRepositoryFactory.create(context.applicationContext, notifications)
     }
+    val permissionController = remember(context.applicationContext) {
+        AndroidNotificationPermissionController(context.applicationContext)
+    }
+    val localHintRenderer = remember(context.applicationContext) {
+        LocalHintNotificationRenderer(context.applicationContext)
+    }
+    val notificationPermissionState by permissionController.state.collectAsState()
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) {
+        permissionController.markRequested(activity)
+    }
     val navController = rememberNavController()
     val destinations = listOf(
         SaseDestination.Inbox,
@@ -108,6 +137,9 @@ fun SaseMobileApp(
     val sessionState by controller.state.collectAsState()
     val pairedHostKey = notificationHostKey(sessionState)
 
+    LaunchedEffect(activity, permissionController) {
+        permissionController.refresh(activity)
+    }
     LaunchedEffect(notifications, pairedHostKey) {
         if (pairedHostKey == null) {
             notifications.stop()
@@ -119,6 +151,14 @@ fun SaseMobileApp(
     }
     DisposableEffect(notifications) {
         onDispose { notifications.stop() }
+    }
+    LaunchedEffect(pendingDeepLinkTarget) {
+        val target = pendingDeepLinkTarget ?: return@LaunchedEffect
+        notifications.fullRefresh(RefreshReason.PushHint)
+        navController.navigate(target.route()) {
+            launchSingleTop = true
+        }
+        onDeepLinkConsumed()
     }
 
     Scaffold(
@@ -247,6 +287,20 @@ fun SaseMobileApp(
             composable(SaseDestination.Settings.route) {
                 SettingsScreen(
                     controller = controller,
+                    notificationPermissionState = notificationPermissionState,
+                    onRequestNotificationPermission = {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        } else {
+                            permissionController.refresh(activity)
+                        }
+                    },
+                    onOpenNotificationSettings = {
+                        permissionController.openSystemSettings()
+                    },
+                    onRenderTestNotification = {
+                        localHintRenderer.render(testLocalHint())
+                    },
                     onOpenUpdate = {
                         navController.navigate(SaseDestination.Update.route) {
                             launchSingleTop = true
@@ -287,6 +341,35 @@ private fun notificationHostKey(state: SessionUiState): String? {
 }
 
 private fun PairedHostSession.notificationHostKey(): String = "$baseUrl|$deviceId"
+
+private fun SaseDeepLinkTarget.route(): String {
+    return when (this) {
+        SaseDeepLinkTarget.Inbox -> SaseDestination.Inbox.route
+        is SaseDeepLinkTarget.NotificationDetail -> SaseDestination.NotificationDetail.createRoute(notificationId)
+        SaseDeepLinkTarget.Agents -> SaseDestination.Agents.route
+        SaseDeepLinkTarget.Update -> SaseDestination.Update.route
+    }
+}
+
+private tailrec fun Context.findActivity(): Activity? {
+    return when (this) {
+        is Activity -> this
+        is ContextWrapper -> baseContext.findActivity()
+        else -> null
+    }
+}
+
+private fun testLocalHint(): LocalNotificationHint {
+    return LocalNotificationHint(
+        notificationId = "local-test-hint",
+        eventId = null,
+        category = LocalHintCategory.Action,
+        title = "SASE action hint",
+        body = "Open SASE Mobile to refresh current host state.",
+        createdAt = "",
+        target = SaseDeepLinkTarget.Inbox,
+    )
+}
 
 sealed interface SaseDestination {
     val route: String

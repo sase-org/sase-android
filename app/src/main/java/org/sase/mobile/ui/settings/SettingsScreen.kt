@@ -29,6 +29,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import org.sase.mobile.data.session.ManualPairingRequest
+import org.sase.mobile.data.notifications.local.NotificationPermissionState
 import org.sase.mobile.data.session.SessionController
 import org.sase.mobile.data.session.SessionStatus
 
@@ -36,6 +37,10 @@ import org.sase.mobile.data.session.SessionStatus
 fun SettingsScreen(
     controller: SessionController,
     modifier: Modifier = Modifier,
+    notificationPermissionState: NotificationPermissionState? = null,
+    onRequestNotificationPermission: () -> Unit = {},
+    onOpenNotificationSettings: () -> Unit = {},
+    onRenderTestNotification: () -> Unit = {},
     onOpenUpdate: () -> Unit = {},
     onOpenHelpers: () -> Unit = {},
 ) {
@@ -72,6 +77,14 @@ fun SettingsScreen(
             onOpenUpdate = onOpenUpdate,
             onOpenHelpers = onOpenHelpers,
         )
+        if (notificationPermissionState != null) {
+            NotificationSettingsCard(
+                state = notificationPermissionState,
+                onRequest = onRequestNotificationPermission,
+                onOpenSettings = onOpenNotificationSettings,
+                onRenderTestNotification = onRenderTestNotification,
+            )
+        }
         ManualPairingFields(
             hostUrl = hostUrl,
             onHostUrlChange = { hostUrl = it },
@@ -118,6 +131,71 @@ fun SettingsScreen(
             },
             onDismiss = { showScanner = false },
         )
+    }
+}
+
+@Composable
+private fun NotificationSettingsCard(
+    state: NotificationPermissionState,
+    onRequest: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onRenderTestNotification: () -> Unit,
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("notification_settings_card"),
+        colors = CardDefaults.cardColors(),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text("Mobile notifications", style = MaterialTheme.typography.titleMedium)
+            Text(notificationPermissionLabel(state))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                when (state) {
+                    NotificationPermissionState.NotRequired,
+                    NotificationPermissionState.Allowed,
+                    -> {
+                        OutlinedButton(
+                            modifier = Modifier.testTag("send_test_notification_button"),
+                            onClick = onRenderTestNotification,
+                        ) {
+                            Text("Send test hint")
+                        }
+                    }
+
+                    NotificationPermissionState.DeniedCanAsk -> {
+                        Button(
+                            modifier = Modifier.testTag("request_notifications_button"),
+                            onClick = onRequest,
+                        ) {
+                            Text("Allow notifications")
+                        }
+                    }
+
+                    NotificationPermissionState.DeniedNeedsSettings -> {
+                        OutlinedButton(
+                            modifier = Modifier.testTag("open_notification_settings_button"),
+                            onClick = onOpenSettings,
+                        ) {
+                            Text("Open system settings")
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun notificationPermissionLabel(state: NotificationPermissionState): String {
+    return when (state) {
+        NotificationPermissionState.NotRequired -> "Notifications are available on this Android version."
+        NotificationPermissionState.Allowed -> "Notifications are allowed for safe SASE hints."
+        NotificationPermissionState.DeniedCanAsk -> "Background notification delivery is inactive until permission is allowed."
+        NotificationPermissionState.DeniedNeedsSettings ->
+            "Notifications are blocked. Enable them in Android app settings to receive background hints."
     }
 }
 
