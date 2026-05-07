@@ -19,6 +19,31 @@ data class GatewayBindWire(
 )
 
 @Serializable
+enum class PushGatewayProviderWire {
+    @SerialName("disabled")
+    Disabled,
+
+    @SerialName("test")
+    Test,
+
+    @SerialName("fcm")
+    Fcm,
+}
+
+@Serializable
+data class PushGatewayStatusWire(
+    val enabled: Boolean,
+    val provider: PushGatewayProviderWire,
+    val attempted: Long,
+    val succeeded: Long,
+    val failed: Long,
+    @SerialName("last_attempt_at") val lastAttemptAt: String? = null,
+    @SerialName("last_success_at") val lastSuccessAt: String? = null,
+    @SerialName("last_failure_at") val lastFailureAt: String? = null,
+    @SerialName("last_failure") val lastFailure: String? = null,
+)
+
+@Serializable
 data class HealthResponseWire(
     @SerialName("schema_version") val schemaVersion: Int,
     val status: String,
@@ -26,6 +51,7 @@ data class HealthResponseWire(
     val version: String,
     val build: GatewayBuildWire,
     val bind: GatewayBindWire,
+    val push: PushGatewayStatusWire,
 )
 
 @Serializable
