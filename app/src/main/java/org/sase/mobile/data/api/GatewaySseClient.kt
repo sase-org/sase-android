@@ -15,6 +15,14 @@ import org.sase.mobile.data.api.dto.ApiErrorWire
 import org.sase.mobile.data.api.dto.EventRecordWire
 import org.sase.mobile.data.api.dto.GatewayJson
 
+fun interface NetworkAvailability {
+    fun isNetworkAvailable(): Boolean
+
+    data object AlwaysAvailable : NetworkAvailability {
+        override fun isNetworkAvailable(): Boolean = true
+    }
+}
+
 class GatewaySseClient(
     baseUrl: String,
     private val bearerTokenProvider: () -> String?,

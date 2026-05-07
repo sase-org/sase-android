@@ -15,6 +15,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -28,8 +29,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
-import org.sase.mobile.data.session.ManualPairingRequest
+import org.sase.mobile.data.notifications.foreground.ForegroundConnectedModeUiState
 import org.sase.mobile.data.notifications.local.NotificationPermissionState
+import org.sase.mobile.data.session.ManualPairingRequest
 import org.sase.mobile.data.session.SessionController
 import org.sase.mobile.data.session.SessionStatus
 
@@ -38,6 +40,9 @@ fun SettingsScreen(
     controller: SessionController,
     modifier: Modifier = Modifier,
     notificationPermissionState: NotificationPermissionState? = null,
+    foregroundConnectedModeState: ForegroundConnectedModeUiState? = null,
+    onStartForegroundConnectedMode: () -> Unit = {},
+    onStopForegroundConnectedMode: () -> Unit = {},
     onRequestNotificationPermission: () -> Unit = {},
     onOpenNotificationSettings: () -> Unit = {},
     onRenderTestNotification: () -> Unit = {},
@@ -83,6 +88,13 @@ fun SettingsScreen(
                 onRequest = onRequestNotificationPermission,
                 onOpenSettings = onOpenNotificationSettings,
                 onRenderTestNotification = onRenderTestNotification,
+            )
+        }
+        if (foregroundConnectedModeState != null) {
+            ForegroundConnectedModeCard(
+                state = foregroundConnectedModeState,
+                onStart = onStartForegroundConnectedMode,
+                onStop = onStopForegroundConnectedMode,
             )
         }
         ManualPairingFields(
@@ -131,6 +143,76 @@ fun SettingsScreen(
             },
             onDismiss = { showScanner = false },
         )
+    }
+}
+
+@Composable
+private fun ForegroundConnectedModeCard(
+    state: ForegroundConnectedModeUiState,
+    onStart: () -> Unit,
+    onStop: () -> Unit,
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("foreground_connected_mode_card"),
+        colors = CardDefaults.cardColors(),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text("Foreground connected mode", style = MaterialTheme.typography.titleMedium)
+            Text(foregroundModeLabel(state))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(state.hostLabel ?: "No paired host")
+                    Text("Connection: ${state.connectionLabel}")
+                    Text("Last refresh: ${state.lastRefreshAt ?: "Never"}")
+                }
+                Switch(
+                    modifier = Modifier.testTag("foreground_connected_mode_switch"),
+                    checked = state.enabled,
+                    enabled = state.canStart || state.enabled,
+                    onCheckedChange = { checked ->
+                        if (checked) {
+                            onStart()
+                        } else {
+                            onStop()
+                        }
+                    },
+                )
+            }
+            if (state.enabled) {
+                OutlinedButton(
+                    modifier = Modifier.testTag("stop_foreground_connected_mode_button"),
+                    onClick = onStop,
+                ) {
+                    Text("Stop")
+                }
+            } else {
+                Button(
+                    modifier = Modifier.testTag("start_foreground_connected_mode_button"),
+                    enabled = state.canStart,
+                    onClick = onStart,
+                ) {
+                    Text("Keep connected")
+                }
+            }
+        }
+    }
+}
+
+private fun foregroundModeLabel(state: ForegroundConnectedModeUiState): String {
+    return if (state.enabled) {
+        "Android is keeping an active foreground notification for the paired gateway."
+    } else if (state.canStart) {
+        "Off. Turn on to keep the gateway event stream active until stopped."
+    } else {
+        "Pair a host before enabling foreground connected mode."
     }
 }
 

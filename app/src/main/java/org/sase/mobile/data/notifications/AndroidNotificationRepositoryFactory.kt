@@ -3,6 +3,7 @@ package org.sase.mobile.data.notifications
 import android.content.Context
 import kotlinx.coroutines.CoroutineScope
 import okhttp3.OkHttpClient
+import org.sase.mobile.data.api.AndroidNetworkAvailability
 import org.sase.mobile.data.api.GatewayApiClient
 import org.sase.mobile.data.api.GatewaySseClient
 import org.sase.mobile.data.api.dto.AgentsChangedEventPayloadWire
@@ -36,6 +37,7 @@ object AndroidNotificationRepositoryFactory {
                     client = client,
                 )
             },
+            networkAvailability = AndroidNetworkAvailability(context),
             onAgentsChanged = onAgentsChanged,
             onHelpersChanged = onHelpersChanged,
             scope = scope,

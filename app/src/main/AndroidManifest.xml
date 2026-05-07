@@ -2,6 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
@@ -25,6 +27,11 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/launch_image_paths" />
         </provider>
+
+        <service
+            android:name=".service.ForegroundConnectedService"
+            android:exported="false"
+            android:foregroundServiceType="remoteMessaging" />
 
         <activity
             android:name=".MainActivity"

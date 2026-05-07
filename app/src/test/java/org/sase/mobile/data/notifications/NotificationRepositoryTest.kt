@@ -14,6 +14,7 @@ import okhttp3.OkHttpClient
 import org.junit.Test
 import org.sase.mobile.data.api.GatewayApiClient
 import org.sase.mobile.data.api.GatewayFixturePaths
+import org.sase.mobile.data.api.NetworkAvailability
 import org.sase.mobile.data.api.GatewaySseClient
 import org.sase.mobile.data.api.dto.HelpersChangedEventPayloadWire
 import org.sase.mobile.data.api.dto.GatewayJson
@@ -159,6 +160,53 @@ class NotificationRepositoryTest {
     }
 
     @Test
+    fun stopKeepsStreamAliveUntilAllOwnersRelease() = runTest {
+        FakeGateway().use { gateway ->
+            gateway.enqueueJson(readResource(GatewayFixturePaths.NotificationsMixed))
+            gateway.enqueueSse(readResource(GatewayFixturePaths.EventHeartbeat))
+            val repository = repository(
+                gateway.baseUrl,
+                delayProvider = { delay(Long.MAX_VALUE) },
+            )
+
+            repository.start("ui")
+            repository.start("foreground")
+            waitUntilInbox(repository) { it.cards.isNotEmpty() }
+            repository.stop("ui")
+
+            assertThat(repository.isRunning()).isTrue()
+
+            repository.stop("foreground")
+
+            assertThat(repository.isRunning()).isFalse()
+            assertThat(repository.connection.value).isEqualTo(NotificationConnectionState.Stopped)
+        }
+    }
+
+    @Test
+    fun sseLoopWaitsForNetworkBeforeConnecting() = runTest {
+        FakeGateway().use { gateway ->
+            gateway.enqueueSse(readResource(GatewayFixturePaths.EventHeartbeat))
+            var available = false
+            val delays = mutableListOf<Long>()
+            val repository = repository(
+                gateway.baseUrl,
+                networkAvailability = NetworkAvailability { available },
+                delayProvider = { delayMillis ->
+                    delays += delayMillis
+                    available = true
+                },
+            )
+
+            repository.runSseLoop(maxConnections = 1)
+
+            assertThat(delays).hasSize(1)
+            assertThat(repository.connection.value).isEqualTo(NotificationConnectionState.Connected)
+            assertThat(gateway.takeRequest().path).isEqualTo("/api/v1/events")
+        }
+    }
+
+    @Test
     fun helpersChangedEventIsForwardedWithStructuredPayload() = runTest {
         FakeGateway().use { gateway ->
             gateway.enqueueSse(readResource(GatewayFixturePaths.EventHelpersChanged))
@@ -203,6 +251,8 @@ class NotificationRepositoryTest {
         baseUrl: HttpUrl = GatewayApiClient.normalizeBaseUrl("http://127.0.0.1:7629/"),
         sessionStorage: InMemoryHostSessionStorage = InMemoryHostSessionStorage(pairedSession(baseUrl)),
         cache: NotificationCache = InMemoryNotificationCache(),
+        networkAvailability: NetworkAvailability = NetworkAvailability.AlwaysAvailable,
+        delayProvider: suspend (Long) -> Unit = { _ -> },
         onHelpersChanged: suspend (HelpersChangedEventPayloadWire) -> Unit = {},
     ): NotificationRepository {
         return NotificationRepository(
@@ -224,7 +274,8 @@ class NotificationRepositoryTest {
                 )
             },
             clock = Clock.fixed(Now, ZoneOffset.UTC),
-            delayProvider = { _ -> },
+            networkAvailability = networkAvailability,
+            delayProvider = delayProvider,
             onHelpersChanged = onHelpersChanged,
             scope = CoroutineScope(SupervisorJob()),
         )

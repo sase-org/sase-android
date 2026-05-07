@@ -5,9 +5,9 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.os.Build
-import androidx.compose.foundation.layout.padding
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -38,24 +38,21 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import kotlinx.coroutines.launch
 import org.sase.mobile.R
-import org.sase.mobile.data.actions.AndroidActionRepositoryFactory
+import org.sase.mobile.SaseAppGraph
 import org.sase.mobile.data.actions.NotificationActionController
 import org.sase.mobile.data.agents.AgentRepository
-import org.sase.mobile.data.agents.AndroidAgentRepositoryFactory
-import org.sase.mobile.data.helpers.AndroidHelperRepositoryFactory
-import org.sase.mobile.data.helpers.AndroidUpdateRepositoryFactory
 import org.sase.mobile.data.helpers.HelperRepository
 import org.sase.mobile.data.helpers.UpdateController
-import org.sase.mobile.data.notifications.AndroidNotificationRepositoryFactory
-import org.sase.mobile.data.notifications.RefreshReason
+import org.sase.mobile.data.notifications.NotificationConnectionState
 import org.sase.mobile.data.notifications.NotificationRepository
+import org.sase.mobile.data.notifications.RefreshReason
+import org.sase.mobile.data.notifications.foreground.ForegroundConnectedModeController
+import org.sase.mobile.data.notifications.foreground.ForegroundConnectedModeUiState
 import org.sase.mobile.data.notifications.local.AndroidNotificationPermissionController
 import org.sase.mobile.data.notifications.local.LocalHintCategory
 import org.sase.mobile.data.notifications.local.LocalHintNotificationRenderer
 import org.sase.mobile.data.notifications.local.LocalNotificationHint
-import org.sase.mobile.data.notifications.local.NotificationPermissionState
 import org.sase.mobile.data.notifications.local.SaseDeepLinkTarget
-import org.sase.mobile.data.session.AndroidSessionRepositoryFactory
 import org.sase.mobile.data.session.PairedHostSession
 import org.sase.mobile.data.session.SessionController
 import org.sase.mobile.data.session.SessionStatus
@@ -78,34 +75,36 @@ fun SaseMobileApp(
     agentRepository: AgentRepository? = null,
     helperRepository: HelperRepository? = null,
     updateController: UpdateController? = null,
+    foregroundController: ForegroundConnectedModeController? = null,
     pendingDeepLinkTarget: SaseDeepLinkTarget? = null,
     onDeepLinkConsumed: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val activity = context.findActivity()
     val scope = rememberCoroutineScope()
-    val controller = sessionController ?: remember(context.applicationContext, scope) {
-        AndroidSessionRepositoryFactory.create(context.applicationContext, scope)
+    val appGraph = remember(context.applicationContext) {
+        SaseAppGraph.get(context.applicationContext)
     }
-    val updates = updateController ?: remember(context.applicationContext, scope) {
-        AndroidUpdateRepositoryFactory.create(context.applicationContext, scope)
+    val controller = sessionController ?: remember(appGraph) {
+        appGraph.sessionController
     }
-    val agents = agentRepository ?: remember(context.applicationContext, scope) {
-        AndroidAgentRepositoryFactory.create(context.applicationContext, scope)
+    val updates = updateController ?: remember(appGraph) {
+        appGraph.updateController
     }
-    val helpers = helperRepository ?: remember(context.applicationContext) {
-        AndroidHelperRepositoryFactory.create(context.applicationContext)
+    val agents = agentRepository ?: remember(appGraph) {
+        appGraph.agentRepository
     }
-    val notifications = notificationRepository ?: remember(context.applicationContext, scope, agents, updates) {
-        AndroidNotificationRepositoryFactory.create(
-            context = context.applicationContext,
-            scope = scope,
-            onAgentsChanged = { payload -> agents.handleAgentsChanged(payload) },
-            onHelpersChanged = { payload -> updates.handleHelpersChanged(payload) },
-        )
+    val helpers = helperRepository ?: remember(appGraph) {
+        appGraph.helperRepository
     }
-    val actions = actionController ?: remember(context.applicationContext, notifications) {
-        AndroidActionRepositoryFactory.create(context.applicationContext, notifications)
+    val notifications = notificationRepository ?: remember(appGraph) {
+        appGraph.notificationRepository
+    }
+    val actions = actionController ?: remember(appGraph) {
+        appGraph.actionController
+    }
+    val foreground = foregroundController ?: remember(appGraph) {
+        appGraph.foregroundController
     }
     val permissionController = remember(context.applicationContext) {
         AndroidNotificationPermissionController(context.applicationContext)
@@ -135,22 +134,26 @@ fun SaseMobileApp(
     val helperEventVersion by notifications.helperEvents.collectAsState()
     val agentsState by agents.state.collectAsState()
     val sessionState by controller.state.collectAsState()
+    val foregroundEnabled by foreground.enabled.collectAsState()
     val pairedHostKey = notificationHostKey(sessionState)
 
     LaunchedEffect(activity, permissionController) {
         permissionController.refresh(activity)
     }
-    LaunchedEffect(notifications, pairedHostKey) {
+    LaunchedEffect(notifications, pairedHostKey, foregroundEnabled) {
         if (pairedHostKey == null) {
-            notifications.stop()
+            notifications.stop(NotificationRepository.OwnerUi)
             agents.stop()
+            if (foregroundEnabled) {
+                foreground.stopAfterHostUnavailable()
+            }
         } else {
-            notifications.start()
+            notifications.start(NotificationRepository.OwnerUi)
             scope.launch { agents.refresh() }
         }
     }
     DisposableEffect(notifications) {
-        onDispose { notifications.stop() }
+        onDispose { notifications.stop(NotificationRepository.OwnerUi) }
     }
     LaunchedEffect(pendingDeepLinkTarget) {
         val target = pendingDeepLinkTarget ?: return@LaunchedEffect
@@ -288,6 +291,19 @@ fun SaseMobileApp(
                 SettingsScreen(
                     controller = controller,
                     notificationPermissionState = notificationPermissionState,
+                    foregroundConnectedModeState = foregroundModeUiState(
+                        enabled = foregroundEnabled,
+                        canStart = pairedHostKey != null,
+                        sessionState = sessionState,
+                        connectionState = connectionState,
+                        lastRefreshAt = inboxState.lastFullRefreshAt,
+                    ),
+                    onStartForegroundConnectedMode = {
+                        foreground.startUntilStopped()
+                    },
+                    onStopForegroundConnectedMode = {
+                        foreground.stop()
+                    },
                     onRequestNotificationPermission = {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
@@ -338,6 +354,41 @@ private fun notificationHostKey(state: SessionUiState): String? {
         else -> state.savedSession
     }
     return session?.notificationHostKey()
+}
+
+private fun foregroundModeUiState(
+    enabled: Boolean,
+    canStart: Boolean,
+    sessionState: SessionUiState,
+    connectionState: NotificationConnectionState,
+    lastRefreshAt: String?,
+): ForegroundConnectedModeUiState {
+    val hostLabel = when (val status = sessionState.status) {
+        is SessionStatus.Paired -> status.session.hostLabel
+        is SessionStatus.AuthExpired -> status.session.hostLabel
+        is SessionStatus.GatewayUnavailable -> status.session?.hostLabel
+        else -> sessionState.savedSession?.hostLabel
+    }
+    return ForegroundConnectedModeUiState(
+        enabled = enabled,
+        canStart = canStart,
+        hostLabel = hostLabel,
+        connectionLabel = connectionStateLabel(connectionState),
+        lastRefreshAt = lastRefreshAt,
+    )
+}
+
+private fun connectionStateLabel(
+    connectionState: NotificationConnectionState,
+): String {
+    return when (connectionState) {
+        NotificationConnectionState.Stopped -> "Stopped"
+        NotificationConnectionState.Connecting -> "Connecting"
+        is NotificationConnectionState.Reconnecting -> "Reconnecting"
+        NotificationConnectionState.Connected -> "Live"
+        is NotificationConnectionState.Offline -> "Offline"
+        NotificationConnectionState.LoggedOut -> "Auth expired"
+    }
 }
 
 private fun PairedHostSession.notificationHostKey(): String = "$baseUrl|$deviceId"

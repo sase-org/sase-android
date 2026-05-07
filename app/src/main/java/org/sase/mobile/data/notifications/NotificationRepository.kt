@@ -15,6 +15,7 @@ import org.sase.mobile.data.api.GatewayApiError
 import org.sase.mobile.data.api.GatewayApiResult
 import org.sase.mobile.data.api.GatewaySseClient
 import org.sase.mobile.data.api.GatewaySseResult
+import org.sase.mobile.data.api.NetworkAvailability
 import org.sase.mobile.data.api.NotificationListQuery
 import org.sase.mobile.data.api.SseReconnectPolicy
 import org.sase.mobile.data.api.dto.ApiErrorCodeWire
@@ -37,6 +38,7 @@ class NotificationRepository(
     private val clientFactory: (baseUrl: String, tokenProvider: () -> String?) -> GatewayApiClient,
     private val sseClientFactory: (baseUrl: String, tokenProvider: () -> String?) -> GatewaySseClient,
     private val reconnectPolicy: SseReconnectPolicy = SseReconnectPolicy(),
+    private val networkAvailability: NetworkAvailability = NetworkAvailability.AlwaysAvailable,
     private val clock: Clock = Clock.systemUTC(),
     private val delayProvider: suspend (Long) -> Unit = { delay(it) },
     private val onAgentsChanged: suspend (AgentsChangedEventPayloadWire) -> Unit = {},
@@ -58,16 +60,21 @@ class NotificationRepository(
     @Volatile
     private var stopped = false
     private var activeJob: Job? = null
+    private val activeOwners = linkedSetOf<String>()
 
     @Synchronized
-    fun start() {
-        activeJob?.cancel()
+    fun start(owner: String = OwnerDefault) {
+        activeOwners += owner
+        if (activeJob?.isActive == true) {
+            return
+        }
         stopped = false
         activeJob = scope.launch {
             loadCachedState()
             val session = sessionStorage.read()
             if (session == null) {
                 mutableConnection.value = NotificationConnectionState.LoggedOut
+                markStoppedByGateway()
                 return@launch
             }
             cache.writeSessionSummary(session)
@@ -77,7 +84,24 @@ class NotificationRepository(
     }
 
     @Synchronized
-    fun stop() {
+    fun stop(owner: String = OwnerDefault) {
+        activeOwners -= owner
+        if (activeOwners.isNotEmpty()) {
+            return
+        }
+        stopAllOwnersLocked()
+    }
+
+    @Synchronized
+    fun forceStop() {
+        stopAllOwnersLocked()
+    }
+
+    @Synchronized
+    fun isRunning(): Boolean = activeJob?.isActive == true
+
+    private fun stopAllOwnersLocked() {
+        activeOwners.clear()
         stopped = true
         activeJob?.cancel()
         activeJob = null
@@ -174,7 +198,14 @@ class NotificationRepository(
             val session = sessionStorage.read()
             if (session == null) {
                 mutableConnection.value = NotificationConnectionState.LoggedOut
+                markStoppedByGateway()
                 return
+            }
+            if (!networkAvailability.isNetworkAvailable()) {
+                mutableConnection.value = NotificationConnectionState.Offline("network unavailable")
+                delayProvider(reconnectPolicy.delayMillis(reconnectAttempt))
+                reconnectAttempt += 1
+                continue
             }
             val token = runCatching { tokenVault.readToken() }.getOrNull()
             val lastEventId = cache.read().syncState.lastEventId
@@ -202,7 +233,7 @@ class NotificationRepository(
                     connectionCount += 1
                     handleFailure(session, result.error)
                     if (result.error.isUnauthorized()) {
-                        stopped = true
+                        markStoppedByGateway()
                         return
                     }
                     if (!stopped && connectionCount < maxConnections) {
@@ -305,6 +336,19 @@ class NotificationRepository(
     }
 
     private fun now(): String = Instant.now(clock).toString()
+
+    @Synchronized
+    private fun markStoppedByGateway() {
+        activeOwners.clear()
+        stopped = true
+        activeJob = null
+    }
+
+    companion object {
+        const val OwnerDefault = "default"
+        const val OwnerUi = "ui"
+        const val OwnerForegroundService = "foreground_service"
+    }
 }
 
 data class NotificationInboxState(

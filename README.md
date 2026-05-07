@@ -27,8 +27,9 @@ embed SASE core logic on the phone.
 - Automated instrumentation smoke coverage for pairing, inbox/detail action UI,
   launch, agents, helpers, update, and settings navigation
 
-Later MVP phases will add background delivery, foreground service behavior,
-notification permission UX, packaging, security review, and release hardening.
+Epic 7 adds notification permission UX, local hint rendering, and foreground
+connected mode. Later phases will add push delivery, packaging, security
+review, and release hardening.
 
 ## Pairing QR Payload
 
@@ -174,16 +175,21 @@ the paired host.
 14. Trigger notification, agent, and helper refreshes on the host, or restart
     the gateway event stream, and verify the app refreshes after
     reconnect/resync.
-15. Return to Settings and forget the host. Verify the app returns to the
+15. Open Settings and turn on Foreground connected mode. Background the app and
+    verify Android shows the persistent SASE connected notification. Trigger a
+    gateway event and verify the app refreshes after reconnect/resync when
+    reopened. Stop connected mode from Settings or the notification action and
+    verify the foreground notification is removed.
+16. Return to Settings and forget the host. Verify the app returns to the
     unpaired state and no cached bearer-token state is usable.
 
 ## Known Limitations
 
-- Background push delivery, foreground service behavior, notification
-  permission UX, packaging, security review, and release hardening are Epic 7
-  work.
-- The app is foreground-first. It refreshes from REST/SSE while open; it does
-  not yet provide durable background notification delivery.
+- Background push delivery, packaging, security review, and release hardening
+  remain Epic 7 work.
+- Foreground connected mode keeps the REST/SSE path active while Android allows
+  its foreground service to run. Push delivery is still required for lower-power
+  background hints.
 - Attachments are displayed as metadata or opened only through scoped
   authenticated download affordances; arbitrary host file browsing is not part
   of the mobile client.

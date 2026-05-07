@@ -7,8 +7,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import org.junit.Rule
 import org.junit.Test
-import org.sase.mobile.data.session.ManualPairingRequest
+import org.sase.mobile.data.notifications.foreground.ForegroundConnectedModeUiState
 import org.sase.mobile.data.notifications.local.NotificationPermissionState
+import org.sase.mobile.data.session.ManualPairingRequest
 import org.sase.mobile.data.session.PairingResult
 import org.sase.mobile.data.session.SessionController
 import org.sase.mobile.data.session.SessionStatus
@@ -49,6 +50,28 @@ class SettingsScreenTest {
         composeRule.onNodeWithText("Allow notifications").assertIsDisplayed()
         composeRule.onNodeWithText("Background notification delivery is inactive until permission is allowed.")
             .assertIsDisplayed()
+    }
+
+    @Test
+    fun showsForegroundConnectedModeControls() {
+        composeRule.setContent {
+            SaseMobileTheme {
+                SettingsScreen(
+                    controller = FakeSessionController(),
+                    foregroundConnectedModeState = ForegroundConnectedModeUiState(
+                        enabled = false,
+                        canStart = true,
+                        hostLabel = "workstation",
+                        connectionLabel = "Stopped",
+                        lastRefreshAt = null,
+                    ),
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Foreground connected mode").assertIsDisplayed()
+        composeRule.onNodeWithText("Keep connected").assertIsDisplayed()
+        composeRule.onNodeWithText("Connection: Stopped").assertIsDisplayed()
     }
 }
 
