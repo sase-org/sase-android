@@ -5,9 +5,11 @@ import java.time.Instant
 import java.time.ZoneOffset
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
@@ -172,9 +174,11 @@ class PushMessageHandlerTest {
         repository: NotificationRepository,
         predicate: (NotificationInboxState) -> Boolean,
     ) {
-        withTimeout(5_000) {
-            while (!predicate(repository.inbox.value)) {
-                delay(10)
+        withContext(Dispatchers.Default.limitedParallelism(1)) {
+            withTimeout(5_000) {
+                while (!predicate(repository.inbox.value)) {
+                    delay(10)
+                }
             }
         }
     }
