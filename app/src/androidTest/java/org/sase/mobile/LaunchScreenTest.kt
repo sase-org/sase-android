@@ -19,6 +19,7 @@ import org.sase.mobile.data.api.dto.MobileAgentTextLaunchRequestWire
 import org.sase.mobile.data.api.dto.MobileBeadSummaryWire
 import org.sase.mobile.data.api.dto.MobileChangeSpecTagEntryWire
 import org.sase.mobile.data.api.dto.MobileXpromptCatalogEntryWire
+import org.sase.mobile.data.api.dto.MobileXpromptInputWire
 import org.sase.mobile.ui.launch.ImageAttachmentError
 import org.sase.mobile.ui.launch.ImageAttachmentLoadResult
 import org.sase.mobile.ui.launch.ImageAttachmentMetadata
@@ -88,6 +89,85 @@ class LaunchScreenTest {
         org.junit.Assert.assertEquals("android-test", captured?.requestId)
         composeRule.onNodeWithTag("launch_prompt_input")
             .assertTextContains("#gh:mobile\n%runtime codex\nKeep 100%")
+    }
+
+    @Test
+    fun selectingRequiredXpromptShowsHintsAndColonActionRewritesReference() {
+        composeRule.setContent {
+            SaseMobileTheme {
+                LaunchScreen(
+                    state = AgentsState(),
+                    onLaunch = { AgentActionState.Succeeded("launched") },
+                    onOpenAgents = {},
+                    onOpenSettings = {},
+                    initialHelperState = helperState(requiredXprompt = true),
+                    requestIdFactory = { "android-test" },
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("launch_prompt_input").performTextInput("prefix ")
+        composeRule.onNodeWithText("#!bd/work_phase_bead").performClick()
+
+        composeRule.onNodeWithTag("xprompt_arg_hint_panel").assertIsDisplayed()
+        composeRule.onNodeWithText("bead_id: word").assertIsDisplayed()
+        composeRule.onNodeWithText("mode: word = fast").assertIsDisplayed()
+
+        composeRule.onNodeWithTag("xprompt_arg_hint_colon").performClick()
+
+        composeRule.onNodeWithTag("launch_prompt_input")
+            .assertTextContains("prefix #!bd/work_phase_bead:")
+    }
+
+    @Test
+    fun selectingRequiredXpromptNamedArgsPreservesLaunchPromptText() {
+        var captured: MobileAgentTextLaunchRequestWire? = null
+        composeRule.setContent {
+            SaseMobileTheme {
+                LaunchScreen(
+                    state = AgentsState(),
+                    onLaunch = {
+                        captured = it
+                        AgentActionState.Succeeded("launched")
+                    },
+                    onOpenAgents = {},
+                    onOpenSettings = {},
+                    initialHelperState = helperState(requiredXprompt = true),
+                    requestIdFactory = { "android-test" },
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("launch_prompt_input").performTextInput("prefix ")
+        composeRule.onNodeWithText("#!bd/work_phase_bead").performClick()
+        composeRule.onNodeWithTag("xprompt_arg_hint_named").performClick()
+        composeRule.onNodeWithTag("launch_submit").performClick()
+        composeRule.waitForIdle()
+
+        org.junit.Assert.assertEquals(
+            "prefix #!bd/work_phase_bead(bead_id=, mode=)",
+            captured?.prompt,
+        )
+    }
+
+    @Test
+    fun selectingXpromptWithoutRequiredInputsDoesNotShowHints() {
+        composeRule.setContent {
+            SaseMobileTheme {
+                LaunchScreen(
+                    state = AgentsState(),
+                    onLaunch = { AgentActionState.Succeeded("launched") },
+                    onOpenAgents = {},
+                    onOpenSettings = {},
+                    initialHelperState = helperState(requiredXprompt = false),
+                    requestIdFactory = { "android-test" },
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("#bd/work_phase_bead").performClick()
+
+        composeRule.onAllNodesWithTag("xprompt_arg_hint_panel").assertCountEquals(0)
     }
 
     @Test
@@ -209,7 +289,7 @@ class LaunchScreenTest {
         composeRule.onNodeWithTag("launch_prompt_input").assertTextContains("Review this screenshot")
     }
 
-    private fun helperState(): LaunchHelperState {
+    private fun helperState(requiredXprompt: Boolean = false): LaunchHelperState {
         return LaunchHelperState(
             changespecs = listOf(
                 MobileChangeSpecTagEntryWire(
@@ -224,9 +304,31 @@ class LaunchScreenTest {
                 MobileXpromptCatalogEntryWire(
                     name = "bd/work_phase_bead",
                     displayLabel = "bd/work_phase_bead",
+                    insertion = if (requiredXprompt) "#!bd/work_phase_bead" else null,
+                    referencePrefix = if (requiredXprompt) "#!" else null,
+                    kind = if (requiredXprompt) "workflow" else null,
                     sourceBucket = "project",
                     project = "sase",
                     tags = listOf("bead"),
+                    inputs = if (requiredXprompt) {
+                        listOf(
+                            MobileXpromptInputWire(
+                                name = "bead_id",
+                                type = "word",
+                                required = true,
+                                position = 0,
+                            ),
+                            MobileXpromptInputWire(
+                                name = "mode",
+                                type = "word",
+                                required = false,
+                                defaultDisplay = "fast",
+                                position = 1,
+                            ),
+                        )
+                    } else {
+                        emptyList()
+                    },
                     isSkill = false,
                 ),
             ),

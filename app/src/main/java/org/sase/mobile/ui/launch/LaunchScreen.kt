@@ -58,6 +58,7 @@ import org.sase.mobile.data.api.dto.MobileChangeSpecTagEntryWire
 import org.sase.mobile.data.api.dto.MobileChangeSpecTagListResponseWire
 import org.sase.mobile.data.api.dto.MobileXpromptCatalogEntryWire
 import org.sase.mobile.data.api.dto.MobileXpromptCatalogResponseWire
+import org.sase.mobile.data.api.dto.MobileXpromptInputWire
 import org.sase.mobile.data.api.dto.referenceText
 import org.sase.mobile.data.helpers.HelperLoadResult
 import org.sase.mobile.data.helpers.HelperRepository
@@ -100,11 +101,15 @@ fun LaunchScreen(
     var helperState by remember(initialHelperState) {
         mutableStateOf(initialHelperState ?: LaunchHelperState())
     }
+    var activeArgHint by remember { mutableStateOf<ActiveXpromptArgHint?>(null) }
     var selectedImage by remember(initialImageAttachment) {
         mutableStateOf(initialImageAttachment)
     }
     var imageError by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingCameraUri by rememberSaveable { mutableStateOf<String?>(null) }
+    val catalogByName = remember(helperState.xprompts) {
+        helperState.xprompts.associateBy { it.name }
+    }
 
     fun attachImage(uri: Uri, source: ImageAttachmentSource) {
         scope.launch {
@@ -159,6 +164,14 @@ fun LaunchScreen(
         refreshHelpers()
     }
 
+    LaunchedEffect(catalogByName, helperState.loading, helperState.failureMessage) {
+        activeArgHint = activeArgHint
+            ?.takeIf { !helperState.loading && helperState.failureMessage == null }
+            ?.let { hint ->
+                catalogByName[hint.entry.name]?.let { entry -> hint.copy(entry = entry) }
+            }
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -177,7 +190,12 @@ fun LaunchScreen(
 
         OutlinedTextField(
             value = prompt,
-            onValueChange = { prompt = it },
+            onValueChange = {
+                prompt = it
+                activeArgHint = activeArgHint?.takeIf { hint ->
+                    hint.referenceRange.end <= it.text.length
+                }
+            },
             label = { Text("Prompt") },
             minLines = 8,
             textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
@@ -186,6 +204,21 @@ fun LaunchScreen(
                 .fillMaxWidth()
                 .testTag("launch_prompt_input"),
         )
+        activeArgHint?.let { hint ->
+            XpromptArgHintPanel(
+                hint = hint,
+                onColonArgs = {
+                    val edit = rewriteActiveXpromptAsColon(prompt, hint)
+                    prompt = edit.value
+                    activeArgHint = edit.hint
+                },
+                onNamedArgs = {
+                    val edit = rewriteActiveXpromptAsNamedArgs(prompt, hint)
+                    prompt = edit.value
+                    activeArgHint = edit.hint
+                },
+            )
+        }
 
         LaunchFields(
             displayName = displayName,
@@ -311,6 +344,16 @@ fun LaunchScreen(
             state = helperState,
             onInsert = { insertion ->
                 prompt = insertPromptSnippet(prompt, insertion)
+                activeArgHint = null
+            },
+            onInsertXprompt = { entry ->
+                val insertion = insertPromptSnippetWithRange(prompt, entry.referenceText())
+                prompt = insertion.value
+                activeArgHint = if (helperState.loading || helperState.failureMessage != null) {
+                    null
+                } else {
+                    hintForSelectedXprompt(entry, insertion.insertedRange)
+                }
             },
             onSetProject = { selectedProject -> project = selectedProject },
         )
@@ -491,6 +534,7 @@ private fun CompactTextField(
 private fun LaunchHelperInsertPanel(
     state: LaunchHelperState,
     onInsert: (String) -> Unit,
+    onInsertXprompt: (MobileXpromptCatalogEntryWire) -> Unit,
     onSetProject: (String) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -516,7 +560,7 @@ private fun LaunchHelperInsertPanel(
                     state.xprompts.take(8).forEach { entry ->
                         val reference = entry.referenceText()
                         AssistChip(
-                            onClick = { onInsert(reference) },
+                            onClick = { onInsertXprompt(entry) },
                             label = { Text(reference) },
                         )
                     }
@@ -529,6 +573,91 @@ private fun LaunchHelperInsertPanel(
                 }
             }
         }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun XpromptArgHintPanel(
+    hint: ActiveXpromptArgHint,
+    onColonArgs: () -> Unit,
+    onNamedArgs: () -> Unit,
+) {
+    val requiredInputs = hint.entry.requiredVisibleInputs()
+    val optionalInputs = hint.entry.optionalVisibleInputs()
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
+        shape = MaterialTheme.shapes.small,
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("xprompt_arg_hint_panel"),
+    ) {
+        Column(
+            modifier = Modifier.padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    text = hint.entry.displayLabel,
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.weight(1f),
+                )
+                OutlinedButton(
+                    onClick = onColonArgs,
+                    modifier = Modifier.testTag("xprompt_arg_hint_colon"),
+                ) {
+                    Text("Colon args")
+                }
+                Button(
+                    onClick = onNamedArgs,
+                    modifier = Modifier.testTag("xprompt_arg_hint_named"),
+                ) {
+                    Text("Named args")
+                }
+            }
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                requiredInputs.forEach { input ->
+                    XpromptInputHintChip(input = input, required = true)
+                }
+                optionalInputs.forEach { input ->
+                    XpromptInputHintChip(input = input, required = false)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun XpromptInputHintChip(
+    input: MobileXpromptInputWire,
+    required: Boolean,
+) {
+    val color = if (required) {
+        MaterialTheme.colorScheme.primaryContainer
+    } else {
+        MaterialTheme.colorScheme.surface.copy(alpha = 0.55f)
+    }
+    val contentColor = if (required) {
+        MaterialTheme.colorScheme.onPrimaryContainer
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
+    }
+    Surface(
+        color = color,
+        contentColor = contentColor,
+        shape = MaterialTheme.shapes.small,
+    ) {
+        Text(
+            text = input.hintDisplayText(),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+        )
     }
 }
 
@@ -654,12 +783,7 @@ internal fun insertPromptSnippet(
     prompt: TextFieldValue,
     snippet: String,
 ): TextFieldValue {
-    val range = prompt.selection
-    val start = minOf(range.start, range.end).coerceIn(0, prompt.text.length)
-    val end = maxOf(range.start, range.end).coerceIn(0, prompt.text.length)
-    val text = prompt.text.replaceRange(start, end, snippet)
-    val cursor = start + snippet.length
-    return TextFieldValue(text = text, selection = TextRange(cursor))
+    return insertPromptSnippetWithRange(prompt, snippet).value
 }
 
 private fun String.cleanLaunchField(): String? = trim().takeIf { it.isNotEmpty() }
