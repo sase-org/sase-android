@@ -60,6 +60,7 @@ import org.sase.mobile.data.api.dto.MobileHelperStatusWire
 import org.sase.mobile.data.api.dto.MobileXpromptCatalogEntryWire
 import org.sase.mobile.data.api.dto.MobileXpromptCatalogResponseWire
 import org.sase.mobile.data.api.dto.MobileXpromptCatalogStatsWire
+import org.sase.mobile.data.api.dto.referenceText
 import org.sase.mobile.data.helpers.HelperLoadResult
 import org.sase.mobile.data.helpers.HelperRepository
 import org.sase.mobile.ui.theme.SaseMobileTheme
@@ -354,7 +355,7 @@ private fun XpromptRow(
     onInsert: (String) -> Unit,
 ) {
     val clipboard = LocalClipboardManager.current
-    val reference = "#${entry.name}"
+    val reference = entry.referenceText()
     ListItem(
         overlineContent = { Text("${entry.sourceBucket} ${entry.project.orEmpty()}".trim()) },
         headlineContent = {
@@ -366,6 +367,7 @@ private fun XpromptRow(
                 if (entry.tags.isNotEmpty()) {
                     Text(entry.tags.joinToString(", "))
                 }
+                Text(reference, fontFamily = FontFamily.Monospace)
                 entry.contentPreview?.let { Text(it, maxLines = 2, overflow = TextOverflow.Ellipsis) }
             }
         },
@@ -728,6 +730,9 @@ private fun previewState(): HelpersScreenState {
                         name = "bd/work_phase_bead",
                         displayLabel = "bd/work_phase_bead",
                         description = "Work a claimed phase bead",
+                        insertion = "#!bd/work_phase_bead",
+                        referencePrefix = "#!",
+                        kind = "workflow",
                         sourceBucket = "project",
                         project = "sase",
                         tags = listOf("bead", "mobile"),

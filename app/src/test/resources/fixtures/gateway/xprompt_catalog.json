@@ -16,10 +16,22 @@
       "name": "bd/work_phase_bead",
       "display_label": "bd/work_phase_bead",
       "description": "Work a claimed phase bead",
+      "insertion": "#!bd/work_phase_bead",
+      "reference_prefix": "#!",
+      "kind": "workflow",
       "source_bucket": "project",
       "project": "sase",
       "tags": ["bead", "mobile"],
       "input_signature": "bead_id",
+      "inputs": [
+        {
+          "name": "bead_id",
+          "type": "word",
+          "required": true,
+          "default_display": null,
+          "position": 0
+        }
+      ],
       "is_skill": false,
       "content_preview": "Read the bead and complete the phase.",
       "source_path_display": "xprompts/bd/work_phase_bead.md"

@@ -8,6 +8,7 @@ import org.junit.Test
 import org.sase.mobile.data.api.GatewayApiClient
 import org.sase.mobile.data.api.GatewayApiError
 import org.sase.mobile.data.api.GatewayFixturePaths
+import org.sase.mobile.data.api.dto.referenceText
 import org.sase.mobile.data.api.readResource
 import org.sase.mobile.data.session.InMemoryHostSessionStorage
 import org.sase.mobile.data.session.InMemoryTokenVault
@@ -41,8 +42,11 @@ class HelperRepositoryTest {
 
             assertThat((tags as HelperLoadResult.Success).value.result.status.name)
                 .isEqualTo("PartialSuccess")
-            assertThat((xprompts as HelperLoadResult.Success).value.entries.single().name)
+            val xpromptResponse = (xprompts as HelperLoadResult.Success).value
+            assertThat(xpromptResponse.entries.single().name)
                 .isEqualTo("bd/work_phase_bead")
+            assertThat(xpromptResponse.entries.single().referenceText())
+                .isEqualTo("#!bd/work_phase_bead")
             assertThat((beads as HelperLoadResult.Success).value.beads.single().id)
                 .isEqualTo("sase-26.6.1")
             assertThat((bead as HelperLoadResult.Success).value.bead.summary.id)

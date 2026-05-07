@@ -38,6 +38,7 @@ import org.sase.mobile.data.api.dto.MobileNotificationListResponseWire
 import org.sase.mobile.data.api.dto.MobileUpdateJobStatusWire
 import org.sase.mobile.data.api.dto.MobileUpdateStartResponseWire
 import org.sase.mobile.data.api.dto.MobileUpdateStatusResponseWire
+import org.sase.mobile.data.api.dto.MobileXpromptCatalogEntryWire
 import org.sase.mobile.data.api.dto.MobileXpromptCatalogResponseWire
 import org.sase.mobile.data.api.dto.NotificationsChangedEventPayloadWire
 import org.sase.mobile.data.api.dto.PairFinishResponseWire
@@ -49,6 +50,7 @@ import org.sase.mobile.data.api.dto.QuestionActionRequestWire
 import org.sase.mobile.data.api.dto.ResyncRequiredEventPayloadWire
 import org.sase.mobile.data.api.dto.SessionEventPayloadWire
 import org.sase.mobile.data.api.dto.SessionResponseWire
+import org.sase.mobile.data.api.dto.referenceText
 
 class GatewayDtoFixtureTest {
     private val json = GatewayJson.format
@@ -222,6 +224,11 @@ class GatewayDtoFixtureTest {
         assertThat(retry.sourceAgent).isEqualTo("mobile-failed")
         assertThat(changespecTags.result.status).isEqualTo(MobileHelperStatusWire.PartialSuccess)
         assertThat(xprompts.stats.pdfRequested).isTrue()
+        assertThat(xprompts.entries[0].referenceText()).isEqualTo("#!bd/work_phase_bead")
+        assertThat(xprompts.entries[0].referencePrefix).isEqualTo("#!")
+        assertThat(xprompts.entries[0].kind).isEqualTo("workflow")
+        assertThat(xprompts.entries[0].inputs.single().name).isEqualTo("bead_id")
+        assertThat(xprompts.entries[0].inputs.single().required).isTrue()
         assertThat(beads.beads[0].id).isEqualTo("sase-26.6.1")
         assertThat(bead.bead.blocks).contains("sase-26.6.2")
         assertThat(updateStart.job.status).isEqualTo(MobileUpdateJobStatusWire.Running)
@@ -266,6 +273,30 @@ class GatewayDtoFixtureTest {
         assertThat(imageLaunch.schemaVersion).isEqualTo(1)
         assertThat(kill.schemaVersion).isEqualTo(1)
         assertThat(retry.schemaVersion).isEqualTo(1)
+    }
+
+    @Test
+    fun xpromptCatalogEntryDefaultsPreserveOldGatewayResponses() {
+        val entry = json.decodeFromString(
+            MobileXpromptCatalogEntryWire.serializer(),
+            """
+            {
+              "name": "bd/work_phase_bead",
+              "display_label": "bd/work_phase_bead",
+              "source_bucket": "project",
+              "project": "sase",
+              "tags": ["bead"],
+              "input_signature": "bead_id",
+              "is_skill": false
+            }
+            """.trimIndent(),
+        )
+
+        assertThat(entry.referenceText()).isEqualTo("#bd/work_phase_bead")
+        assertThat(entry.insertion).isNull()
+        assertThat(entry.referencePrefix).isNull()
+        assertThat(entry.kind).isNull()
+        assertThat(entry.inputs).isEmpty()
     }
 
     @Test

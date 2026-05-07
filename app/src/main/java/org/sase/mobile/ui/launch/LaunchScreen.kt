@@ -58,6 +58,7 @@ import org.sase.mobile.data.api.dto.MobileChangeSpecTagEntryWire
 import org.sase.mobile.data.api.dto.MobileChangeSpecTagListResponseWire
 import org.sase.mobile.data.api.dto.MobileXpromptCatalogEntryWire
 import org.sase.mobile.data.api.dto.MobileXpromptCatalogResponseWire
+import org.sase.mobile.data.api.dto.referenceText
 import org.sase.mobile.data.helpers.HelperLoadResult
 import org.sase.mobile.data.helpers.HelperRepository
 import org.sase.mobile.ui.theme.SaseMobileTheme
@@ -154,7 +155,7 @@ fun LaunchScreen(
         }
     }
 
-    LaunchedEffect(helperRepository, helperEventVersion) {
+    LaunchedEffect(helperRepository, helperEventVersion, project) {
         refreshHelpers()
     }
 
@@ -513,9 +514,10 @@ private fun LaunchHelperInsertPanel(
                         )
                     }
                     state.xprompts.take(8).forEach { entry ->
+                        val reference = entry.referenceText()
                         AssistChip(
-                            onClick = { onInsert("#${entry.name}") },
-                            label = { Text("#${entry.displayLabel}") },
+                            onClick = { onInsert(reference) },
+                            label = { Text(reference) },
                         )
                     }
                     state.beads.take(8).forEach { bead ->
@@ -763,6 +765,9 @@ private fun previewHelperState(): LaunchHelperState {
             MobileXpromptCatalogEntryWire(
                 name = "bd/work_phase_bead",
                 displayLabel = "bd/work_phase_bead",
+                insertion = "#!bd/work_phase_bead",
+                referencePrefix = "#!",
+                kind = "workflow",
                 sourceBucket = "project",
                 project = "sase",
                 tags = listOf("bead"),

@@ -109,14 +109,31 @@ data class MobileXpromptCatalogEntryWire(
     val name: String,
     @SerialName("display_label") val displayLabel: String,
     val description: String? = null,
+    val insertion: String? = null,
+    @SerialName("reference_prefix") val referencePrefix: String? = null,
+    val kind: String? = null,
     @SerialName("source_bucket") val sourceBucket: String,
     val project: String? = null,
     val tags: List<String>,
     @SerialName("input_signature") val inputSignature: String? = null,
+    val inputs: List<MobileXpromptInputWire> = emptyList(),
     @SerialName("is_skill") val isSkill: Boolean,
     @SerialName("content_preview") val contentPreview: String? = null,
     @SerialName("source_path_display") val sourcePathDisplay: String? = null,
 )
+
+@Serializable
+data class MobileXpromptInputWire(
+    val name: String,
+    val type: String,
+    val required: Boolean,
+    @SerialName("default_display") val defaultDisplay: String? = null,
+    val position: Int,
+)
+
+fun MobileXpromptCatalogEntryWire.referenceText(): String {
+    return insertion ?: "#$name"
+}
 
 @Serializable
 data class MobileXpromptCatalogStatsWire(
