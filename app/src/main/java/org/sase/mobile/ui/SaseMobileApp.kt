@@ -52,7 +52,11 @@ import org.sase.mobile.data.notifications.local.AndroidNotificationPermissionCon
 import org.sase.mobile.data.notifications.local.LocalHintCategory
 import org.sase.mobile.data.notifications.local.LocalHintNotificationRenderer
 import org.sase.mobile.data.notifications.local.LocalNotificationHint
+import org.sase.mobile.data.notifications.local.NotificationPermissionState
 import org.sase.mobile.data.notifications.local.SaseDeepLinkTarget
+import org.sase.mobile.data.notifications.push.PushDeliveryState
+import org.sase.mobile.data.notifications.push.PushRegistrationManager
+import org.sase.mobile.data.notifications.push.PushRegistrationStatus
 import org.sase.mobile.data.session.PairedHostSession
 import org.sase.mobile.data.session.SessionController
 import org.sase.mobile.data.session.SessionStatus
@@ -63,6 +67,7 @@ import org.sase.mobile.ui.inbox.InboxScreen
 import org.sase.mobile.ui.launch.LaunchScreen
 import org.sase.mobile.ui.notification.NotificationDetailScreen
 import org.sase.mobile.ui.settings.SettingsScreen
+import org.sase.mobile.ui.settings.PushDeliveryUiState
 import org.sase.mobile.ui.update.UpdateScreen
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -76,6 +81,7 @@ fun SaseMobileApp(
     helperRepository: HelperRepository? = null,
     updateController: UpdateController? = null,
     foregroundController: ForegroundConnectedModeController? = null,
+    pushRegistrationManager: PushRegistrationManager? = null,
     pendingDeepLinkTarget: SaseDeepLinkTarget? = null,
     onDeepLinkConsumed: () -> Unit = {},
 ) {
@@ -106,6 +112,9 @@ fun SaseMobileApp(
     val foreground = foregroundController ?: remember(appGraph) {
         appGraph.foregroundController
     }
+    val pushRegistration = pushRegistrationManager ?: remember(appGraph) {
+        appGraph.pushRegistrationManager
+    }
     val permissionController = remember(context.applicationContext) {
         AndroidNotificationPermissionController(context.applicationContext)
     }
@@ -135,6 +144,7 @@ fun SaseMobileApp(
     val agentsState by agents.state.collectAsState()
     val sessionState by controller.state.collectAsState()
     val foregroundEnabled by foreground.enabled.collectAsState()
+    val pushDeliveryState by pushRegistration.state.collectAsState()
     val pairedHostKey = notificationHostKey(sessionState)
 
     LaunchedEffect(activity, permissionController) {
@@ -144,12 +154,18 @@ fun SaseMobileApp(
         if (pairedHostKey == null) {
             notifications.stop(NotificationRepository.OwnerUi)
             agents.stop()
+            pushRegistration.markUnpaired()
             if (foregroundEnabled) {
                 foreground.stopAfterHostUnavailable()
             }
         } else {
             notifications.start(NotificationRepository.OwnerUi)
             scope.launch { agents.refresh() }
+        }
+    }
+    LaunchedEffect(pushRegistration, pairedHostKey) {
+        if (pairedHostKey != null) {
+            pushRegistration.refreshTokenRegistration()
         }
     }
     DisposableEffect(notifications) {
@@ -291,6 +307,11 @@ fun SaseMobileApp(
                 SettingsScreen(
                     controller = controller,
                     notificationPermissionState = notificationPermissionState,
+                    pushDeliveryState = pushDeliveryUiState(
+                        state = pushDeliveryState,
+                        permissionMissing = notificationPermissionState.deniesNotifications(),
+                        foregroundModeRunning = foregroundEnabled,
+                    ),
                     foregroundConnectedModeState = foregroundModeUiState(
                         enabled = foregroundEnabled,
                         canStart = pairedHostKey != null,
@@ -356,6 +377,34 @@ private fun notificationHostKey(state: SessionUiState): String? {
     return session?.notificationHostKey()
 }
 
+private fun pushDeliveryUiState(
+    state: PushDeliveryState,
+    permissionMissing: Boolean,
+    foregroundModeRunning: Boolean,
+): PushDeliveryUiState {
+    return PushDeliveryUiState(
+        statusLabel = when (state.registrationStatus) {
+            PushRegistrationStatus.Unpaired -> "Pair a host before enabling push hints."
+            PushRegistrationStatus.NotRegistered -> "Push token has not been registered yet."
+            PushRegistrationStatus.Registering -> "Registering FCM token with the paired gateway."
+            PushRegistrationStatus.Registered -> "FCM token is registered with the paired gateway."
+            PushRegistrationStatus.AuthExpired -> "Authentication expired. Pair or check the host again."
+            PushRegistrationStatus.Failed -> "Push registration failed."
+        },
+        tokenLabel = state.registeredTokenSuffix?.let { "Token: ...$it" },
+        permissionMissing = permissionMissing,
+        foregroundModeRunning = foregroundModeRunning,
+        lastHintReceivedAt = state.lastHintReceivedAt,
+        lastHintSummary = state.lastHintSummary,
+        registrationFailure = state.registrationFailure,
+    )
+}
+
+private fun NotificationPermissionState.deniesNotifications(): Boolean {
+    return this == NotificationPermissionState.DeniedCanAsk ||
+        this == NotificationPermissionState.DeniedNeedsSettings
+}
+
 private fun foregroundModeUiState(
     enabled: Boolean,
     canStart: Boolean,
@@ -398,6 +447,7 @@ private fun SaseDeepLinkTarget.route(): String {
         SaseDeepLinkTarget.Inbox -> SaseDestination.Inbox.route
         is SaseDeepLinkTarget.NotificationDetail -> SaseDestination.NotificationDetail.createRoute(notificationId)
         SaseDeepLinkTarget.Agents -> SaseDestination.Agents.route
+        SaseDeepLinkTarget.Helpers -> SaseDestination.Helpers.route
         SaseDeepLinkTarget.Update -> SaseDestination.Update.route
     }
 }

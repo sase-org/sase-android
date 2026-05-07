@@ -28,7 +28,7 @@ embed SASE core logic on the phone.
   launch, agents, helpers, update, and settings navigation
 
 Epic 7 adds notification permission UX, local hint rendering, and foreground
-connected mode. Later phases will add push delivery, packaging, security
+connected mode, and FCM push hints. Later phases will add packaging, security
 review, and release hardening.
 
 ## Pairing QR Payload
@@ -95,6 +95,38 @@ app/src/test/resources/contracts/mobile_api_v1.json
 
 The app should treat the gateway as authoritative and keep local state limited
 to session continuity and offline display.
+
+## Firebase Cloud Messaging
+
+FCM is optional for local builds. The debug APK builds without Firebase project
+secrets; push token registration is attempted only at runtime and reports a
+settings-card registration issue if Firebase is not configured.
+
+For an internal/direct APK that should receive push hints:
+
+1. Create a Firebase Android app for package `org.sase.mobile`.
+2. Place the downloaded config at:
+
+   ```text
+   app/google-services.json
+   ```
+
+3. Keep that file local. It is ignored by git and must not be committed.
+4. Build normally:
+
+   ```bash
+   ./gradlew assembleDebug
+   ```
+
+When `app/google-services.json` exists, Gradle applies the Google Services
+plugin for the app module. Without that file, the Firebase Messaging dependency
+still compiles so tests and non-push local builds remain credential-free.
+
+The app registers FCM tokens with the authenticated gateway endpoint
+`POST /api/v1/session/push-subscriptions`. Push data messages are treated as
+hint-only: they may contain event IDs, categories, short safe title/body text,
+and routing IDs, but the app always refreshes authoritative host state through
+the paired gateway after receipt or notification tap.
 
 ## Fake Gateway Smoke
 
@@ -180,13 +212,19 @@ the paired host.
     gateway event and verify the app refreshes after reconnect/resync when
     reopened. Stop connected mode from Settings or the notification action and
     verify the foreground notification is removed.
-16. Return to Settings and forget the host. Verify the app returns to the
+16. For an FCM-configured build, verify Settings shows Push delivery as
+    registered after pairing. Send a gateway test push or FCM data message with
+    `category`, `id`, `reason`, `title`, and `body`; verify the local
+    notification opens the app and the inbox refreshes from the host.
+17. Return to Settings and forget the host. Verify the app returns to the
     unpaired state and no cached bearer-token state is usable.
 
 ## Known Limitations
 
-- Background push delivery, packaging, security review, and release hardening
-  remain Epic 7 work.
+- Packaging, security review, and release hardening remain Epic 7 work.
+- FCM push requires a local `app/google-services.json` and matching host
+  gateway push-provider configuration. Normal unit tests never require real FCM
+  credentials.
 - Foreground connected mode keeps the REST/SSE path active while Android allows
   its foreground service to run. Push delivery is still required for lower-power
   background hints.

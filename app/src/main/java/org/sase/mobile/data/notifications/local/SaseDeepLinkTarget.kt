@@ -8,6 +8,7 @@ sealed interface SaseDeepLinkTarget {
     data object Inbox : SaseDeepLinkTarget
     data class NotificationDetail(val notificationId: String) : SaseDeepLinkTarget
     data object Agents : SaseDeepLinkTarget
+    data object Helpers : SaseDeepLinkTarget
     data object Update : SaseDeepLinkTarget
 }
 
@@ -16,6 +17,7 @@ fun SaseDeepLinkTarget.toUriString(): String {
         SaseDeepLinkTarget.Inbox -> "inbox"
         is SaseDeepLinkTarget.NotificationDetail -> "notification/${notificationId.urlPathEncode()}"
         SaseDeepLinkTarget.Agents -> "agents"
+        SaseDeepLinkTarget.Helpers -> "helpers"
         SaseDeepLinkTarget.Update -> "update"
     }
     return "$DeepLinkPrefix/$path"
@@ -36,6 +38,7 @@ fun parseSaseDeepLink(raw: String?): SaseDeepLinkTarget? {
     return when {
         segments == listOf("inbox") -> SaseDeepLinkTarget.Inbox
         segments == listOf("agents") -> SaseDeepLinkTarget.Agents
+        segments == listOf("helpers") -> SaseDeepLinkTarget.Helpers
         segments == listOf("update") -> SaseDeepLinkTarget.Update
         segments.size == 2 && segments[0] == "notification" && segments[1].isNotBlank() ->
             SaseDeepLinkTarget.NotificationDetail(segments[1])

@@ -56,6 +56,10 @@ import org.sase.mobile.data.api.dto.PairStartRequestWire
 import org.sase.mobile.data.api.dto.PairStartResponseWire
 import org.sase.mobile.data.api.dto.PlanActionChoiceWire
 import org.sase.mobile.data.api.dto.PlanActionRequestWire
+import org.sase.mobile.data.api.dto.PushSubscriptionDeleteResponseWire
+import org.sase.mobile.data.api.dto.PushSubscriptionListResponseWire
+import org.sase.mobile.data.api.dto.PushSubscriptionRegisterResponseWire
+import org.sase.mobile.data.api.dto.PushSubscriptionRequestWire
 import org.sase.mobile.data.api.dto.QuestionActionChoiceWire
 import org.sase.mobile.data.api.dto.QuestionActionRequestWire
 import org.sase.mobile.data.api.dto.SessionResponseWire
@@ -106,6 +110,35 @@ class GatewayApiClient(
         return get(
             url = endpoint("session"),
             serializer = SessionResponseWire.serializer(),
+            authenticated = true,
+        )
+    }
+
+    suspend fun pushSubscriptions(): GatewayApiResult<PushSubscriptionListResponseWire> {
+        return get(
+            url = endpoint("session", "push-subscriptions"),
+            serializer = PushSubscriptionListResponseWire.serializer(),
+            authenticated = true,
+        )
+    }
+
+    suspend fun registerPushSubscription(
+        request: PushSubscriptionRequestWire,
+    ): GatewayApiResult<PushSubscriptionRegisterResponseWire> {
+        return postJson(
+            url = endpoint("session", "push-subscriptions"),
+            serializer = PushSubscriptionRegisterResponseWire.serializer(),
+            body = json.encodeToString(PushSubscriptionRequestWire.serializer(), request),
+            authenticated = true,
+        )
+    }
+
+    suspend fun deletePushSubscription(
+        id: String,
+    ): GatewayApiResult<PushSubscriptionDeleteResponseWire> {
+        return delete(
+            url = endpoint("session", "push-subscriptions", id),
+            serializer = PushSubscriptionDeleteResponseWire.serializer(),
             authenticated = true,
         )
     }
@@ -372,6 +405,17 @@ class GatewayApiClient(
             request = requestBuilder(url, authenticated)
                 .post(body.toRequestBody(JsonMediaType))
                 .build(),
+            serializer = serializer,
+        )
+    }
+
+    private suspend fun <T> delete(
+        url: HttpUrl,
+        serializer: KSerializer<T>,
+        authenticated: Boolean,
+    ): GatewayApiResult<T> {
+        return execute(
+            request = requestBuilder(url, authenticated).delete().build(),
             serializer = serializer,
         )
     }

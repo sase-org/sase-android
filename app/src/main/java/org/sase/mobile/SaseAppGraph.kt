@@ -12,6 +12,8 @@ import org.sase.mobile.data.notifications.AndroidNotificationRepositoryFactory
 import org.sase.mobile.data.notifications.NotificationRepository
 import org.sase.mobile.data.notifications.foreground.DataStoreForegroundConnectedModeStore
 import org.sase.mobile.data.notifications.foreground.ForegroundConnectedModeController
+import org.sase.mobile.data.notifications.push.AndroidPushRegistrationManagerFactory
+import org.sase.mobile.data.notifications.push.PushRegistrationManager
 import org.sase.mobile.data.session.AndroidSessionRepositoryFactory
 import org.sase.mobile.service.AndroidForegroundConnectedServiceCommands
 
@@ -21,7 +23,12 @@ class SaseAppGraph private constructor(
     private val appContext = context.applicationContext
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
-    val sessionController = AndroidSessionRepositoryFactory.create(appContext, scope)
+    val pushRegistrationManager: PushRegistrationManager = AndroidPushRegistrationManagerFactory.create(appContext, scope)
+    val sessionController = AndroidSessionRepositoryFactory.create(
+        context = appContext,
+        scope = scope,
+        onBeforeForgetHost = { pushRegistrationManager.revokeActiveSubscriptionsBeforeForget() },
+    )
     val updateController = AndroidUpdateRepositoryFactory.create(appContext, scope)
     val agentRepository = AndroidAgentRepositoryFactory.create(appContext, scope)
     val helperRepository = AndroidHelperRepositoryFactory.create(appContext)

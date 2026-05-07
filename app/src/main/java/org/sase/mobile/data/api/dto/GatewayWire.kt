@@ -237,3 +237,100 @@ data class NotificationStateMutationResponseWire(
     val dismissed: Boolean,
     val changed: Boolean,
 )
+
+@Serializable
+enum class PushProviderWire {
+    @SerialName("fcm")
+    Fcm,
+
+    @SerialName("unified_push")
+    UnifiedPush,
+
+    @SerialName("ntfy")
+    Ntfy,
+
+    @SerialName("test")
+    Test,
+}
+
+@Serializable
+enum class PushHintCategoryWire {
+    @SerialName("notifications")
+    Notifications,
+
+    @SerialName("agents")
+    Agents,
+
+    @SerialName("helpers")
+    Helpers,
+
+    @SerialName("update")
+    Update,
+
+    @SerialName("session")
+    Session,
+}
+
+@Serializable
+data class PushHintWire(
+    @SerialName("schema_version") val schemaVersion: Int = GatewayWireSchemaVersion,
+    val id: String,
+    val category: PushHintCategoryWire,
+    val reason: String,
+    val title: String,
+    val body: String,
+    @SerialName("created_at") val createdAt: String,
+    @SerialName("notification_id") val notificationId: String? = null,
+    @SerialName("agent_name") val agentName: String? = null,
+    val helper: String? = null,
+    @SerialName("job_id") val jobId: String? = null,
+)
+
+@Serializable
+data class PushSubscriptionRequestWire(
+    @SerialName("schema_version") val schemaVersion: Int = GatewayWireSchemaVersion,
+    val provider: PushProviderWire,
+    @SerialName("provider_token") val providerToken: String,
+    @SerialName("app_instance_id") val appInstanceId: String? = null,
+    val platform: String? = null,
+    @SerialName("app_version") val appVersion: String? = null,
+    @SerialName("device_display_name") val deviceDisplayName: String? = null,
+    @SerialName("hint_categories") val hintCategories: List<PushHintCategoryWire> = PushHintCategoryWire.entries,
+)
+
+@Serializable
+data class PushSubscriptionRecordWire(
+    @SerialName("schema_version") val schemaVersion: Int,
+    val id: String,
+    val provider: PushProviderWire,
+    @SerialName("provider_token") val providerToken: String,
+    @SerialName("app_instance_id") val appInstanceId: String? = null,
+    @SerialName("device_id") val deviceId: String,
+    @SerialName("device_display_name") val deviceDisplayName: String? = null,
+    val platform: String? = null,
+    @SerialName("app_version") val appVersion: String? = null,
+    @SerialName("hint_categories") val hintCategories: List<PushHintCategoryWire> = emptyList(),
+    @SerialName("enabled_at") val enabledAt: String,
+    @SerialName("last_seen_at") val lastSeenAt: String? = null,
+    @SerialName("disabled_at") val disabledAt: String? = null,
+)
+
+@Serializable
+data class PushSubscriptionListResponseWire(
+    @SerialName("schema_version") val schemaVersion: Int,
+    val subscriptions: List<PushSubscriptionRecordWire>,
+)
+
+@Serializable
+data class PushSubscriptionRegisterResponseWire(
+    @SerialName("schema_version") val schemaVersion: Int,
+    val created: Boolean,
+    val subscription: PushSubscriptionRecordWire,
+)
+
+@Serializable
+data class PushSubscriptionDeleteResponseWire(
+    @SerialName("schema_version") val schemaVersion: Int,
+    val revoked: Boolean,
+    val subscription: PushSubscriptionRecordWire,
+)

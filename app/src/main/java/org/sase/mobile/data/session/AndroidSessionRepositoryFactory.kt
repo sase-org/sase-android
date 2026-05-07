@@ -12,6 +12,7 @@ object AndroidSessionRepositoryFactory {
         context: Context,
         scope: CoroutineScope,
         client: OkHttpClient = OkHttpClient(),
+        onBeforeForgetHost: suspend () -> Unit = {},
     ): SessionRepository {
         return SessionRepository(
             storage = DataStoreHostSessionStorage(context),
@@ -33,7 +34,7 @@ object AndroidSessionRepositoryFactory {
                 )
             },
             scope = scope,
+            onBeforeForgetHost = onBeforeForgetHost,
         )
     }
 }
-

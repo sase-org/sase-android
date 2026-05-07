@@ -32,6 +32,7 @@ class SessionRepository(
     private val deviceMetadataProvider: () -> DeviceMetadata,
     private val clock: Clock = Clock.systemUTC(),
     scope: CoroutineScope,
+    private val onBeforeForgetHost: suspend () -> Unit = {},
 ) : SessionController {
     private val mutableState = MutableStateFlow(SessionUiState(SessionStatus.Loading))
     override val state: StateFlow<SessionUiState> = mutableState.asStateFlow()
@@ -121,6 +122,7 @@ class SessionRepository(
     }
 
     override suspend fun forgetHost() {
+        onBeforeForgetHost()
         tokenVault.clearToken()
         storage.clear()
         mutableState.value = SessionUiState(SessionStatus.Unpaired)

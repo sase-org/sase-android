@@ -8,6 +8,7 @@ class SaseDeepLinkTargetTest {
     fun parsesSupportedRoutes() {
         assertThat(parseSaseDeepLink("sase://mobile/inbox")).isEqualTo(SaseDeepLinkTarget.Inbox)
         assertThat(parseSaseDeepLink("sase://mobile/agents")).isEqualTo(SaseDeepLinkTarget.Agents)
+        assertThat(parseSaseDeepLink("sase://mobile/helpers")).isEqualTo(SaseDeepLinkTarget.Helpers)
         assertThat(parseSaseDeepLink("sase://mobile/update")).isEqualTo(SaseDeepLinkTarget.Update)
         assertThat(parseSaseDeepLink("sase://mobile/notification/plan0001-review"))
             .isEqualTo(SaseDeepLinkTarget.NotificationDetail("plan0001-review"))

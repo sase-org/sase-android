@@ -40,6 +40,7 @@ fun SettingsScreen(
     controller: SessionController,
     modifier: Modifier = Modifier,
     notificationPermissionState: NotificationPermissionState? = null,
+    pushDeliveryState: PushDeliveryUiState? = null,
     foregroundConnectedModeState: ForegroundConnectedModeUiState? = null,
     onStartForegroundConnectedMode: () -> Unit = {},
     onStopForegroundConnectedMode: () -> Unit = {},
@@ -89,6 +90,9 @@ fun SettingsScreen(
                 onOpenSettings = onOpenNotificationSettings,
                 onRenderTestNotification = onRenderTestNotification,
             )
+        }
+        if (pushDeliveryState != null) {
+            PushDeliveryCard(state = pushDeliveryState)
         }
         if (foregroundConnectedModeState != null) {
             ForegroundConnectedModeCard(
@@ -143,6 +147,46 @@ fun SettingsScreen(
             },
             onDismiss = { showScanner = false },
         )
+    }
+}
+
+data class PushDeliveryUiState(
+    val statusLabel: String,
+    val tokenLabel: String?,
+    val permissionMissing: Boolean,
+    val foregroundModeRunning: Boolean,
+    val lastHintReceivedAt: String?,
+    val lastHintSummary: String?,
+    val registrationFailure: String?,
+)
+
+@Composable
+private fun PushDeliveryCard(
+    state: PushDeliveryUiState,
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("push_delivery_card"),
+        colors = CardDefaults.cardColors(),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text("Push delivery", style = MaterialTheme.typography.titleMedium)
+            Text(state.statusLabel)
+            state.tokenLabel?.let { Text(it) }
+            if (state.permissionMissing) {
+                Text("Notification permission is missing.")
+            }
+            if (state.foregroundModeRunning) {
+                Text("Foreground connected mode is also running.")
+            }
+            Text("Last hint: ${state.lastHintSummary ?: "None"}")
+            state.lastHintReceivedAt?.let { Text("Received: $it") }
+            state.registrationFailure?.let { Text("Registration issue: $it") }
+        }
     }
 }
 

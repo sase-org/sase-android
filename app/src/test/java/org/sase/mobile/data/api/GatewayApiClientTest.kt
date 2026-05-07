@@ -30,6 +30,9 @@ import org.sase.mobile.data.api.dto.PairingDeviceMetadataWire
 import org.sase.mobile.data.api.dto.PairStartRequestWire
 import org.sase.mobile.data.api.dto.PlanActionChoiceWire
 import org.sase.mobile.data.api.dto.PlanActionRequestWire
+import org.sase.mobile.data.api.dto.PushHintCategoryWire
+import org.sase.mobile.data.api.dto.PushProviderWire
+import org.sase.mobile.data.api.dto.PushSubscriptionRequestWire
 import org.sase.mobile.data.api.dto.QuestionActionChoiceWire
 import org.sase.mobile.data.api.dto.QuestionActionRequestWire
 import org.sase.mobile.testing.FakeGateway
@@ -157,6 +160,42 @@ class GatewayApiClientTest {
             assertThat(gateway.takeRequest().path).isEqualTo("/api/v1/notifications/plan0001-review")
             assertThat(gateway.takeRequest().path).isEqualTo("/api/v1/notifications/plan0001-review/mark-read")
             assertThat(gateway.takeRequest().path).isEqualTo("/api/v1/notifications/plan0001-review/dismiss")
+        }
+    }
+
+    @Test
+    fun managesPushSubscriptionsWithAuthenticatedRoutes() = runTest {
+        FakeGateway().use { gateway ->
+            gateway.enqueueJson(PushSubscriptionListResponse)
+            gateway.enqueueJson(PushSubscriptionRegisterResponse)
+            gateway.enqueueJson(PushSubscriptionDeleteResponse)
+
+            val client = client(gateway.baseUrl) { "sase_mobile_secret" }
+
+            assertThat(client.pushSubscriptions().isSuccess()).isTrue()
+            assertThat(
+                client.registerPushSubscription(
+                    PushSubscriptionRequestWire(
+                        provider = PushProviderWire.Fcm,
+                        providerToken = "fcm-token-secret",
+                        appInstanceId = "app-instance-1",
+                        platform = "android",
+                        appVersion = "0.1.0",
+                        deviceDisplayName = "Pixel 9",
+                        hintCategories = listOf(PushHintCategoryWire.Notifications),
+                    ),
+                ).isSuccess(),
+            ).isTrue()
+            assertThat(client.deletePushSubscription("sub_fcm_1").isSuccess()).isTrue()
+
+            val list = gateway.takeRequest()
+            val register = gateway.takeRequest()
+            val delete = gateway.takeRequest()
+            assertThat(list.path).isEqualTo("/api/v1/session/push-subscriptions")
+            assertThat(register.path).isEqualTo("/api/v1/session/push-subscriptions")
+            assertThat(delete.path).isEqualTo("/api/v1/session/push-subscriptions/sub_fcm_1")
+            assertThat(list.getHeader("Authorization")).isEqualTo("Bearer sase_mobile_secret")
+            assertThat(register.body.readUtf8()).contains("\"provider_token\":\"fcm-token-secret\"")
         }
     }
 
@@ -450,6 +489,57 @@ class GatewayApiClientTest {
               "read": true,
               "dismissed": true,
               "changed": true
+            }
+        """.trimIndent()
+
+        val PushSubscriptionListResponse = """
+            {
+              "schema_version": 1,
+              "subscriptions": []
+            }
+        """.trimIndent()
+
+        val PushSubscriptionRegisterResponse = """
+            {
+              "schema_version": 1,
+              "created": true,
+              "subscription": {
+                "schema_version": 1,
+                "id": "sub_fcm_1",
+                "provider": "fcm",
+                "provider_token": "fcm-token-secret",
+                "app_instance_id": "app-instance-1",
+                "device_id": "dev_pixel",
+                "device_display_name": "Pixel 9",
+                "platform": "android",
+                "app_version": "0.1.0",
+                "hint_categories": ["notifications"],
+                "enabled_at": "2026-05-07T12:00:00Z",
+                "last_seen_at": null,
+                "disabled_at": null
+              }
+            }
+        """.trimIndent()
+
+        val PushSubscriptionDeleteResponse = """
+            {
+              "schema_version": 1,
+              "revoked": true,
+              "subscription": {
+                "schema_version": 1,
+                "id": "sub_fcm_1",
+                "provider": "fcm",
+                "provider_token": "fcm-token-secret",
+                "app_instance_id": "app-instance-1",
+                "device_id": "dev_pixel",
+                "device_display_name": "Pixel 9",
+                "platform": "android",
+                "app_version": "0.1.0",
+                "hint_categories": ["notifications"],
+                "enabled_at": "2026-05-07T12:00:00Z",
+                "last_seen_at": null,
+                "disabled_at": "2026-05-07T12:01:00Z"
+              }
             }
         """.trimIndent()
     }

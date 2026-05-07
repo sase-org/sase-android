@@ -4,6 +4,7 @@
 /build/
 /app/build/
 /local.properties
+/app/google-services.json
 captures/
 .externalNativeBuild/
 .cxx/
